@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "14032586517",
+    "project_id": "fitness-gamified",
+    "storage_bucket": "fitness-gamified.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:14032586517:android:37d68c80fdd073a38d8b1c",
+        "android_client_info": {
+          "package_name": "com.example.rankupfcc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARWvhv9EQpS8LSQiSXtuRi3tdf4oyXB1E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
