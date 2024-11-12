@@ -9,6 +9,7 @@ class ChallengePage extends StatefulWidget {
 
 class _ChallengePageState extends State<ChallengePage> {
   int _selectedIndex = 0;
+  Timer? _countdownTimer; // Timer variable
 
   // These are the manually set values for steps, active time, and calories burnt.
   double _currentSteps = 9000.0; // (value) steps out of 6000
@@ -28,13 +29,23 @@ class _ChallengePageState extends State<ChallengePage> {
   }
 
   void _startCountdown() {
-    Timer.periodic(Duration(seconds: 1), (timer) {
-      setState(() {
-        DateTime now = DateTime.now();
-        DateTime midnight = DateTime(now.year, now.month, now.day + 1, 0, 0, 0);
-        _timeLeft = midnight.difference(now);
-      });
+    _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (mounted) { // Check if the widget is still in the tree
+        setState(() {
+          DateTime now = DateTime.now();
+          DateTime midnight = DateTime(now.year, now.month, now.day + 1, 0, 0, 0);
+          _timeLeft = midnight.difference(now);
+        });
+      } else {
+        timer.cancel(); // Cancel the timer if the widget is no longer mounted
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel(); // Cancel the timer when the widget is disposed
+    super.dispose();
   }
 
   String _formatTimeLeft(Duration duration) {
