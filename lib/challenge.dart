@@ -72,38 +72,30 @@ class _ChallengePageState extends State<ChallengePage> {
 
   @override
   Widget build(BuildContext context) {
-    double screenHeight = MediaQuery.of(context).size.height;
     double screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      body: Center(
-        child: Container(
-          width: screenWidth * 0.9, // 90% of screen width
-          height: screenHeight * 0.7, // 70% of screen height
-          padding: EdgeInsets.all(16.0),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.black87, Colors.black54],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blueAccent.withOpacity(0.3),
-                blurRadius: 10.0,
-                spreadRadius: 5.0,
-              ),
-            ],
+      body: Container(
+        width: screenWidth,
+        padding: EdgeInsets.all(26.0),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1B1B1B), Color.fromARGB(228, 31, 78, 90), Color(0xFF3D5363)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Text(
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: 50),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
                   'Daily Challenge',
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.tealAccent,
                     shadows: [
@@ -115,47 +107,56 @@ class _ChallengePageState extends State<ChallengePage> {
                     ],
                   ),
                 ),
-              ),
-              SizedBox(height: 10), // Spacing between title and line
-              Center(
-                child: Container(
-                  width: screenWidth * 0.9 * 0.85, // 85% of the container width
-                  height: 2.0,
-                  color: Colors.tealAccent.withOpacity(0.5), // Glowing line
+                Text(
+                  _formatTimeLeft(_timeLeft),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.redAccent,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 15.0,
+                        color: Colors.redAccent.withOpacity(0.8),
+                        offset: Offset(0, 0),
+                      ),
+                    ],
+                  ),
                 ),
+              ],
+            ),
+            SizedBox(height: 10), // Spacing between row and line
+            Center(
+              child: Container(
+                width: screenWidth * 0.95, // 85% of the screen width
+                height: 2.0,
+                color: Colors.tealAccent.withOpacity(0.5), // Glowing line
               ),
-              SizedBox(height: 20), // Spacing between line and list
-              _buildListItem('1. Steps', '${_currentSteps.toInt()}/6000', _currentSteps, _totalSteps, screenWidth),
-              SizedBox(height: 20), // Gap between items
-              _buildListItem('2. Active Time', '${_currentActiveTime.toInt()}/90 min', _currentActiveTime, _totalActiveTime, screenWidth),
-              SizedBox(height: 20), // Gap between items
-              _buildListItem('3. Calories burnt', '${_currentCaloriesBurnt.toInt()}/400 kcal', _currentCaloriesBurnt, _totalCaloriesBurnt, screenWidth),
-              Spacer(),
-              Text(
-                'Time left until reset:',
+            ),
+            SizedBox(height: 20), // Spacing between line and list
+            _buildListItem('1. Steps', '${_currentSteps.toInt()}/6000', _currentSteps, _totalSteps, screenWidth),
+            SizedBox(height: 20), // Gap between items
+            _buildListItem('2. Active Time', '${_currentActiveTime.toInt()}/90 min', _currentActiveTime, _totalActiveTime, screenWidth),
+            SizedBox(height: 20), // Gap between items
+            _buildListItem('3. Calories burnt', '${_currentCaloriesBurnt.toInt()}/400 kcal', _currentCaloriesBurnt, _totalCaloriesBurnt, screenWidth),
+            SizedBox(height: 27), // Space below the last challenge item
+            Center(
+              child: Text(
+                'Reward: Sample Reward', // Reward text
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white70,
-                ),
-              ),
-              Text(
-                _formatTimeLeft(_timeLeft),
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.redAccent,
+                  color: Colors.tealAccent,
                   shadows: [
                     Shadow(
-                      blurRadius: 15.0,
-                      color: Colors.redAccent.withOpacity(0.8),
+                      blurRadius: 10.0,
+                      color: Colors.tealAccent.withOpacity(0.7),
                       offset: Offset(0, 0),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
