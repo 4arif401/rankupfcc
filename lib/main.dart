@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import 'challenge.dart'; // Import your ChallengePage
 import 'register.dart'; // Import your RegisterPage
 
@@ -27,7 +28,7 @@ class AuthenticationWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Replace this with real authentication logic
-    bool isLoggedIn = false; // Example flag, set it based on actual authentication status
+    bool isLoggedIn = FirebaseAuth.instance.currentUser != null;
 
     if (isLoggedIn) {
       return ChallengePage();
@@ -41,6 +42,38 @@ class LoginPage extends StatelessWidget {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  Future<void> _login(BuildContext context) async {
+    try {
+      // Sign in with email and password
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+      // Navigate to ChallengePage if successful
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => ChallengePage()),
+      );
+    } catch (e) {
+      // Show error if login fails
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Login Failed'),
+          content: Text(e.toString()),
+          actions: [
+            TextButton(
+              child: Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     double screenHeight = MediaQuery.of(context).size.height;
@@ -52,7 +85,7 @@ class LoginPage extends StatelessWidget {
         height: screenHeight,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF1B1B1B), Color(0xFF1F4E5A), Color(0xFF3D5363)], // Refined gradient colors
+            colors: [Color(0xFF1B1B1B), Color(0xFF1F4E5A), Color(0xFF3D5363)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -85,7 +118,7 @@ class LoginPage extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w300,
-                      color: Colors.tealAccent.withOpacity(0.8), // Subtle accent color
+                      color: Colors.tealAccent.withOpacity(0.8),
                     ),
                   ),
                   SizedBox(height: 80),
@@ -128,13 +161,7 @@ class LoginPage extends StatelessWidget {
                   ),
                   SizedBox(height: 30),
                   ElevatedButton(
-                    onPressed: () {
-                      // Implement login logic here
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => ChallengePage()),
-                      );
-                    },
+                    onPressed: () => _login(context), // Call the _login method
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.tealAccent,
                       foregroundColor: Colors.black,
@@ -154,7 +181,6 @@ class LoginPage extends StatelessWidget {
                   SizedBox(height: 20),
                   TextButton(
                     onPressed: () {
-                      // Navigate to RegisterPage
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => RegisterPage()),

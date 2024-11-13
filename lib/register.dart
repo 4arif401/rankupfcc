@@ -1,9 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterPage extends StatelessWidget {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Future<void> _registerUser(BuildContext context) async {
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text.trim();
+    final String confirmPassword = _confirmPasswordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      _showMessage(context, 'Please fill in all fields.');
+      return;
+    }
+    if (password != confirmPassword) {
+      _showMessage(context, 'Passwords do not match.');
+      return;
+    }
+
+    try {
+      // Register the user in Firebase Auth
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final userId = userCredential.user?.uid;
+      if (userId != null) {
+        // Attempt to store user info in Firestore
+        await _firestore.collection('Users').doc(userId).set({
+          'email': email,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        _showMessage(context, 'Registration and Firestore save successful!');
+        Navigator.pop(context); // Navigate back to the login screen
+      } else {
+        _showMessage(context, 'Registration succeeded but user ID is null.');
+      }
+    } catch (e) {
+      print('Error creating Firestore document: $e'); // Debug print
+      _showMessage(context, 'Registration failed: $e');
+    }
+  }
+
+  void _showMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +66,7 @@ class RegisterPage extends StatelessWidget {
         height: screenHeight,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)], // Gradient colors
+            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -102,9 +152,7 @@ class RegisterPage extends StatelessWidget {
                   ),
                   SizedBox(height: 30),
                   ElevatedButton(
-                    onPressed: () {
-                      // Implement registration logic here
-                    },
+                    onPressed: () => _registerUser(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.tealAccent,
                       foregroundColor: Colors.black,

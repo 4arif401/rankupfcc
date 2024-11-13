@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'challenge.dart';
+import 'main.dart'; // Import for LoginPage
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -19,9 +21,13 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  void _logout() {
-    // Implement your logout logic here
-    Navigator.popUntil(context, (route) => route.isFirst);
+  void _logout() async {
+    await FirebaseAuth.instance.signOut(); // Log out from Firebase
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => LoginPage()),
+      (route) => false,
+    );
   }
 
   @override
