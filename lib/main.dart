@@ -24,6 +24,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+//for user to auto login the second time they open the app if not logout
 class AuthenticationWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

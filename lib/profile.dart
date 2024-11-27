@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import for Firestore
 import 'challenge.dart';
 import 'main.dart'; // Import for LoginPage
+import 'custom_bottom_navigation.dart';
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -10,6 +12,51 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   int _selectedIndex = 1;
+
+  // Variables to store user data
+  String username = "Loading...";
+  String email = "Loading...";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user != null) {
+        // Fetch user email from Auth
+        setState(() {
+          email = user.email ?? "No email";
+        });
+
+        // Fetch username from Firestore
+        final DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('Users') // Ensure this matches your Firestore collection name
+            .doc(user.uid)
+            .get();
+
+        if (userDoc.exists) {
+          setState(() {
+            username = userDoc['username'] ?? "No username"; // Fetch 'username' field
+          });
+        } else {
+          setState(() {
+            username = "No username found";
+          });
+        }
+      }
+    } catch (e) {
+      print("Error loading user data: $e");
+      setState(() {
+        username = "Error loading username";
+        email = "Error loading email";
+      });
+    }
+  }
 
   void _onItemTapped(int index) {
     if (index == 0) {
@@ -48,11 +95,11 @@ class _ProfilePageState extends State<ProfilePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Username',
+                        username,
                         style: TextStyle(fontSize: 20, color: Colors.white70),
                       ),
                       Text(
-                        'user@example.com',
+                        email,
                         style: TextStyle(fontSize: 16, color: Colors.white54),
                       ),
                     ],
@@ -116,23 +163,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.black87,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fitness_center, color: Colors.tealAccent),
-            label: 'Challenge',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person, color: Colors.tealAccent),
-            label: 'Profile',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.tealAccent,
-        unselectedItemColor: Colors.white70,
-        onTap: _onItemTapped,
-      ),
+      bottomNavigationBar: CustomBottomNavigationBar(currentIndex: 2),
     );
   }
 }

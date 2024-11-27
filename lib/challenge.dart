@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async'; // For Timer
 import 'profile.dart';
+import 'variable.dart'; // Import the global variables
+import 'custom_bottom_navigation.dart';
 
 class ChallengePage extends StatefulWidget {
   @override
@@ -10,11 +12,6 @@ class ChallengePage extends StatefulWidget {
 class _ChallengePageState extends State<ChallengePage> {
   int _selectedIndex = 0;
   Timer? _countdownTimer; // Timer variable
-
-  // These are the manually set values for steps, active time, and calories burnt.
-  double _currentSteps = 9000.0; // (value) steps out of 6000
-  double _currentActiveTime = 45.0; // (value) minutes of active time out of 90
-  double _currentCaloriesBurnt = 300.0; // (value) kcal burnt out of 400
 
   final double _totalSteps = 6000;
   final double _totalActiveTime = 90;
@@ -30,11 +27,17 @@ class _ChallengePageState extends State<ChallengePage> {
 
   void _startCountdown() {
     _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (mounted) { // Check if the widget is still in the tree
+      if (mounted) {
         setState(() {
           DateTime now = DateTime.now();
-          DateTime midnight = DateTime(now.year, now.month, now.day + 1, 0, 0, 0);
-          _timeLeft = midnight.difference(now);
+
+          // Adjust for GMT+8
+          DateTime gmtPlus8Now = now.toUtc().add(Duration(hours: 8));
+
+          // Calculate next midnight in GMT+8
+          DateTime midnight = DateTime(gmtPlus8Now.year, gmtPlus8Now.month, gmtPlus8Now.day + 1, 0, 0, 0);
+
+          _timeLeft = midnight.difference(gmtPlus8Now);
         });
       } else {
         timer.cancel(); // Cancel the timer if the widget is no longer mounted
@@ -133,11 +136,11 @@ class _ChallengePageState extends State<ChallengePage> {
               ),
             ),
             SizedBox(height: 20), // Spacing between line and list
-            _buildListItem('1. Steps', '${_currentSteps.toInt()}/6000', _currentSteps, _totalSteps, screenWidth),
+            _buildListItem('1. Steps', '${steps.toInt()}/6000', steps, _totalSteps, screenWidth),
             SizedBox(height: 20), // Gap between items
-            _buildListItem('2. Active Time', '${_currentActiveTime.toInt()}/90 min', _currentActiveTime, _totalActiveTime, screenWidth),
+            _buildListItem('2. Active Time', '${activeTime.toInt()}/90 min', activeTime, _totalActiveTime, screenWidth),
             SizedBox(height: 20), // Gap between items
-            _buildListItem('3. Calories burnt', '${_currentCaloriesBurnt.toInt()}/400 kcal', _currentCaloriesBurnt, _totalCaloriesBurnt, screenWidth),
+            _buildListItem('3. Calories burnt', '${caloriesBurnt.toInt()}/400 kcal', caloriesBurnt, _totalCaloriesBurnt, screenWidth),
             SizedBox(height: 27), // Space below the last challenge item
             Center(
               child: Text(
@@ -159,23 +162,7 @@ class _ChallengePageState extends State<ChallengePage> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.black87,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fitness_center, color: Colors.tealAccent),
-            label: 'Challenge',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person, color: Colors.tealAccent),
-            label: 'Profile',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.tealAccent,
-        unselectedItemColor: Colors.white70,
-        onTap: _onItemTapped,
-      ),
+      bottomNavigationBar: CustomBottomNavigationBar(currentIndex: 0),
     );
   }
 
