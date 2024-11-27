@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
-import 'challenge.dart'; // Import your ChallengePage
-import 'register.dart'; // Import your RegisterPage
+import 'package:firebase_auth/firebase_auth.dart'; // Firebase Auth
+import 'challenge.dart'; // Import ChallengePage
+import 'register.dart'; // Import RegisterPage
+import 'variable.dart'; // Import global variables for steps, activeTime, and caloriesBurnt
+import 'package:pedometer/pedometer.dart'; // Import Pedometer for step tracking
+import 'step_tracker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(); // Initialize Firebase
+  StepTracker stepTracker = StepTracker(); // Instantiate StepTracker
+  stepTracker.initStepTracker(); // Initialize step tracking
   runApp(MyApp());
 }
 
@@ -24,11 +29,42 @@ class MyApp extends StatelessWidget {
   }
 }
 
-//for user to auto login the second time they open the app if not logout
-class AuthenticationWrapper extends StatelessWidget {
+// Auto-login wrapper for Firebase Authentication
+class AuthenticationWrapper extends StatefulWidget {
+  @override
+  _AuthenticationWrapperState createState() => _AuthenticationWrapperState();
+}
+
+class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
+  late Stream<StepCount> _stepCountStream;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchFitnessData(); // Load data from Firestore
+    _initializePedometer();
+  }
+
+  void _initializePedometer() {
+    _stepCountStream = Pedometer.stepCountStream;
+    _stepCountStream.listen(_onStepCount).onError(_onStepCountError);
+  }
+
+  void _onStepCount(StepCount event) {
+    setState(() {
+      steps.value = event.steps.toDouble(); // Update the `value` property of `steps`
+      caloriesBurnt.value = steps.value * 0.04; // Example: 0.04 calories per step
+      activeTime.value = steps.value / 100; // Example: 100 steps = 1 minute of activity
+    });
+  }
+
+
+  void _onStepCountError(dynamic error) {
+    print("StepCount Error: $error");
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Replace this with real authentication logic
     bool isLoggedIn = FirebaseAuth.instance.currentUser != null;
 
     if (isLoggedIn) {
@@ -45,18 +81,15 @@ class LoginPage extends StatelessWidget {
 
   Future<void> _login(BuildContext context) async {
     try {
-      // Sign in with email and password
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      // Navigate to ChallengePage if successful
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ChallengePage()),
       );
     } catch (e) {
-      // Show error if login fails
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -65,9 +98,7 @@ class LoginPage extends StatelessWidget {
           actions: [
             TextButton(
               child: Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
             ),
           ],
         ),
@@ -162,7 +193,7 @@ class LoginPage extends StatelessWidget {
                   ),
                   SizedBox(height: 30),
                   ElevatedButton(
-                    onPressed: () => _login(context), // Call the _login method
+                    onPressed: () => _login(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.tealAccent,
                       foregroundColor: Colors.black,

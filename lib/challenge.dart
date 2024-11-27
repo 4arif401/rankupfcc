@@ -3,6 +3,8 @@ import 'dart:async'; // For Timer
 import 'profile.dart';
 import 'variable.dart'; // Import the global variables
 import 'custom_bottom_navigation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ChallengePage extends StatefulWidget {
   @override
@@ -11,7 +13,7 @@ class ChallengePage extends StatefulWidget {
 
 class _ChallengePageState extends State<ChallengePage> {
   int _selectedIndex = 0;
-  Timer? _countdownTimer; // Timer variable
+  Timer? _countdownTimer;
 
   final double _totalSteps = 6000;
   final double _totalActiveTime = 90;
@@ -23,27 +25,50 @@ class _ChallengePageState extends State<ChallengePage> {
   void initState() {
     super.initState();
     _startCountdown();
+    _syncDataWithFirebase();
+    fetchFitnessData();
   }
 
+  /// Sync the local ValueNotifier data with Firebase whenever it changes.
+  void _syncDataWithFirebase() {
+    steps.addListener(() => saveFitnessData());
+    activeTime.addListener(() => saveFitnessData());
+    caloriesBurnt.addListener(() => saveFitnessData());
+  }
+
+  /// Countdown logic to reset variables at midnight
   void _startCountdown() {
     _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       if (mounted) {
+        DateTime now = DateTime.now().toLocal(); // Get current time in device's local time zone
         setState(() {
-          DateTime now = DateTime.now();
+          
+          DateTime midnight = DateTime(now.year, now.month, now.day + 1, 0, 0, 0); // Calculate next midnight
 
-          // Adjust for GMT+8
-          DateTime gmtPlus8Now = now.toUtc().add(Duration(hours: 8));
+          _timeLeft = midnight.difference(now); // Time left until midnight
 
-          // Calculate next midnight in GMT+8
-          DateTime midnight = DateTime(gmtPlus8Now.year, gmtPlus8Now.month, gmtPlus8Now.day + 1, 0, 0, 0);
+          // Check if countdown has reached 0 or gone negative
+          if (_timeLeft.isNegative || _timeLeft.inSeconds == 0) {
+            resetVariables(); // Reset global variables
+            saveFitnessData(); // Save data to Firestore
+            timer.cancel(); // Stop the current timer
+            _startCountdown(); // Restart the countdown for the next day
+          }
 
-          _timeLeft = midnight.difference(gmtPlus8Now);
+          
         });
+
+        if (now.second == 0) {
+            saveFitnessData();
+        }
+
       } else {
         timer.cancel(); // Cancel the timer if the widget is no longer mounted
       }
     });
   }
+
+
 
   @override
   void dispose() {
@@ -51,26 +76,14 @@ class _ChallengePageState extends State<ChallengePage> {
     super.dispose();
   }
 
+  /// Format time left in HH:MM:SS
   String _formatTimeLeft(Duration duration) {
     return '${duration.inHours.toString().padLeft(2, '0')}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}';
   }
 
+  /// Calculate progress for LinearProgressIndicator
   double _getProgress(double current, double total) {
-    return (current / total).clamp(0.0, 1.0); // Ensure progress doesn't go above 1.0
-  }
-
-  double _getOverflowProgress(double current, double total) {
-    return (current > total ? (current - total) / total : 0).clamp(0.0, 1.0).toDouble(); // Ensure result is a double
-  }
-
-  void _onItemTapped(int index) {
-    if (index == 1) {
-      // Navigate to Profile Page when Profile is selected
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => ProfilePage()),
-      );
-    }
+    return (current / total).clamp(0.0, 1.0); // Ensure progress doesn't exceed 1.0
   }
 
   @override
@@ -130,21 +143,21 @@ class _ChallengePageState extends State<ChallengePage> {
             SizedBox(height: 10), // Spacing between row and line
             Center(
               child: Container(
-                width: screenWidth * 0.95, // 85% of the screen width
+                width: screenWidth * 0.95,
                 height: 2.0,
-                color: Colors.tealAccent.withOpacity(0.5), // Glowing line
+                color: Colors.tealAccent.withOpacity(0.5),
               ),
             ),
             SizedBox(height: 20), // Spacing between line and list
-            _buildListItem('1. Steps', '${steps.toInt()}/6000', steps, _totalSteps, screenWidth),
+            _buildListItem('1. Steps', steps, _totalSteps, screenWidth),
             SizedBox(height: 20), // Gap between items
-            _buildListItem('2. Active Time', '${activeTime.toInt()}/90 min', activeTime, _totalActiveTime, screenWidth),
+            _buildListItem('2. Active Time', activeTime, _totalActiveTime, screenWidth),
             SizedBox(height: 20), // Gap between items
-            _buildListItem('3. Calories burnt', '${caloriesBurnt.toInt()}/400 kcal', caloriesBurnt, _totalCaloriesBurnt, screenWidth),
+            _buildListItem('3. Calories burnt', caloriesBurnt, _totalCaloriesBurnt, screenWidth),
             SizedBox(height: 27), // Space below the last challenge item
             Center(
               child: Text(
-                'Reward: Sample Reward', // Reward text
+                'Reward: Sample Reward',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -166,56 +179,52 @@ class _ChallengePageState extends State<ChallengePage> {
     );
   }
 
-  Widget _buildListItem(String title, String value, double currentValue, double maxValue, double screenWidth) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  /// Build list item with ValueNotifier support
+  Widget _buildListItem(String title, ValueNotifier<double> valueNotifier, double maxValue, double screenWidth) {
+    return ValueListenableBuilder<double>(
+      valueListenable: valueNotifier,
+      builder: (context, value, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 20,
-                color: Colors.white70,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                color: Colors.tealAccent,
-                fontWeight: FontWeight.bold,
-                shadows: [
-                  Shadow(
-                    blurRadius: 8.0,
-                    color: Colors.tealAccent.withOpacity(0.7),
-                    offset: Offset(0, 0),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 20,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
                   ),
-                ],
-              ),
+                ),
+                Text(
+                  '${value.toInt()} / ${maxValue.toInt()}',
+                  style: TextStyle(
+                    fontSize: 20,
+                    color: Colors.tealAccent,
+                    fontWeight: FontWeight.bold,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 8.0,
+                        color: Colors.tealAccent.withOpacity(0.7),
+                        offset: Offset(0, 0),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        SizedBox(height: 10), // Spacing between text and progress bar
-        Stack(
-          children: [
+            SizedBox(height: 10),
             LinearProgressIndicator(
-              value: _getProgress(currentValue, maxValue),
+              value: _getProgress(value, maxValue),
               backgroundColor: Colors.white12,
               valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent),
               minHeight: 8.0,
             ),
-            LinearProgressIndicator(
-              value: _getOverflowProgress(currentValue, maxValue),
-              backgroundColor: Colors.transparent,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.redAccent),
-              minHeight: 8.0,
-            ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
