@@ -9,10 +9,28 @@ import 'step_tracker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(); // Initialize Firebase
-  StepTracker stepTracker = StepTracker(); // Instantiate StepTracker
-  stepTracker.initStepTracker(); // Initialize step tracking
-  runApp(MyApp());
+  try {
+    await Firebase.initializeApp(); // Initialize Firebase
+    StepTracker stepTracker = StepTracker(); // Instantiate StepTracker
+    stepTracker.initStepTracker(); // Initialize step tracking
+    runApp(MyApp());
+  } catch (e) {
+    print("Error during app initialization: $e");
+    runApp(ErrorApp()); // Optional: Show an error page if initialization fails
+  }
+}
+
+class ErrorApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Text('Error initializing app. Please try again later.'),
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -43,6 +61,7 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
     super.initState();
     fetchFitnessData(); // Load data from Firestore
     _initializePedometer();
+    checkAndResetData();
   }
 
   void _initializePedometer() {

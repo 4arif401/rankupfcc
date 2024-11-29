@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart'; // Import for formatting the date
 
 class RegisterPage extends StatelessWidget {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -14,8 +16,9 @@ class RegisterPage extends StatelessWidget {
     final String email = _emailController.text.trim();
     final String password = _passwordController.text.trim();
     final String confirmPassword = _confirmPasswordController.text.trim();
+    final String username = _usernameController.text.trim();
 
-    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+    if (email.isEmpty || password.isEmpty || confirmPassword.isEmpty || username.isEmpty) {
       _showMessage(context, 'Please fill in all fields.');
       return;
     }
@@ -33,11 +36,17 @@ class RegisterPage extends StatelessWidget {
 
       final userId = userCredential.user?.uid;
       if (userId != null) {
+        // Get today's date in a readable format
+        String todayDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
         // Attempt to store user info in Firestore
         await _firestore.collection('Users').doc(userId).set({
           'email': email,
-          'createdAt': FieldValue.serverTimestamp(),
+          'username': username,
+          'createdAt': todayDate,
+          'lastResetDate': todayDate,
         });
+
         _showMessage(context, 'Registration and Firestore save successful!');
         Navigator.pop(context); // Navigate back to the login screen
       } else {
@@ -94,6 +103,25 @@ class RegisterPage extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: 40),
+                  TextField(
+                    controller: _usernameController,
+                    decoration: InputDecoration(
+                      labelText: 'Username',
+                      labelStyle: TextStyle(color: Colors.tealAccent),
+                      filled: true,
+                      fillColor: Colors.black45,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10.0),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Colors.tealAccent),
+                      ),
+                      prefixIcon: Icon(Icons.person, color: Colors.tealAccent),
+                    ),
+                    keyboardType: TextInputType.text,
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  SizedBox(height: 20),
                   TextField(
                     controller: _emailController,
                     decoration: InputDecoration(

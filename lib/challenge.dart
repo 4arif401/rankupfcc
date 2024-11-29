@@ -5,6 +5,7 @@ import 'variable.dart'; // Import the global variables
 import 'custom_bottom_navigation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'step_tracker.dart';
 
 class ChallengePage extends StatefulWidget {
   @override
@@ -27,6 +28,7 @@ class _ChallengePageState extends State<ChallengePage> {
     _startCountdown();
     _syncDataWithFirebase();
     fetchFitnessData();
+    checkAndResetData();
   }
 
   /// Sync the local ValueNotifier data with Firebase whenever it changes.
@@ -57,10 +59,6 @@ class _ChallengePageState extends State<ChallengePage> {
 
           
         });
-
-        if (now.second == 0) {
-            saveFitnessData();
-        }
 
       } else {
         timer.cancel(); // Cancel the timer if the widget is no longer mounted

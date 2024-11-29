@@ -8,52 +8,53 @@ ValueNotifier<double> activeTime = ValueNotifier<double>(0.0);
 ValueNotifier<double> caloriesBurnt = ValueNotifier<double>(0.0);
 
 // Function to reset all variables
-void resetVariables() {
-  steps.value = 0.0; // Reset step count
-  activeTime.value = 0.0; // Reset active time
-  caloriesBurnt.value = 0.0; // Reset calories burnt
-}
-
-// Save fitness data to Firestore
-Future<void> saveFitnessData() async {
+Future<void> resetVariables() async {
   try {
-    User? user = FirebaseAuth.instance.currentUser; // Get the current user
-    if (user == null) return; // Ensure user is logged in
-
-    // Save data only if steps, activeTime, and caloriesBurnt are non-zero
-    if (steps.value > 0 || activeTime.value > 0 || caloriesBurnt.value > 0) {
-      await FirebaseFirestore.instance.collection('Users').doc(user.uid).set({
-        'steps': steps.value,
-        'activeTime': activeTime.value,
-        'caloriesBurnt': caloriesBurnt.value,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true)); // Merge updates with existing data
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print('User not logged in, skipping reset.');
+      return;
     }
+
+    // Reset global variables locally
+    steps.value = 0.0;
+    activeTime.value = 0.0;
+    caloriesBurnt.value = 0.0;
+
+    // Reset data in Firebase
+    await FirebaseFirestore.instance.collection('Users').doc(user.uid).update({
+      'steps': 0.0,
+      'activeTime': 0.0,
+      'caloriesBurnt': 0.0,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+
+    print('Variables and Firebase data reset successfully.');
   } catch (e) {
-    print('Error saving fitness data: $e');
-  }
-}
-
-// Retrieve fitness data from Firestore
-Future<void> fetchFitnessData() async {
-  try {
-    User? user = FirebaseAuth.instance.currentUser; // Get the current user
-    if (user == null) return; // Ensure user is logged in
-
-    DocumentSnapshot snapshot = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
-
-    if (snapshot.exists) {
-      Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-      steps.value = (data['steps'] ?? 0).toDouble();
-      activeTime.value = (data['activeTime'] ?? 0).toDouble();
-      caloriesBurnt.value = (data['caloriesBurnt'] ?? 0).toDouble();
+    if (e is FirebaseException && e.code == 'not-found') {
+      // If the document does not exist, create it with reset data
+      await _initializeUserData();
+      print('User data initialized as the document did not exist.');
     } else {
-      // Initialize values in Firebase if the document does not exist
-      resetVariables();
-      saveFitnessData();
+      print('Error resetting variables: $e');
     }
-  } catch (e) {
-    print('Error fetching fitness data: $e');
   }
 }
 
+// Function to initialize a new user document in Firebase
+Future<void> _initializeUserData() async {
+  try {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    await FirebaseFirestore.instance.collection('Users').doc(user.uid).set({
+      'steps': 0.0,
+      'activeTime': 0.0,
+      'caloriesBurnt': 0.0,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+    print('User data initialized in Firebase.');
+  } catch (e) {
+    print('Error initializing user data: $e');
+  }
+}
