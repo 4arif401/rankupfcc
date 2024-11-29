@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Firebase Auth
+import 'package:firebase_auth/firebase_auth.dart';
 import 'challenge.dart'; // Import ChallengePage
 import 'register.dart'; // Import RegisterPage
 import 'variable.dart'; // Import global variables for steps, activeTime, and caloriesBurnt
-import 'package:pedometer/pedometer.dart'; // Import Pedometer for step tracking
-import 'step_tracker.dart';
+import 'step_tracker.dart'; // Import StepTracker for step tracking
+import 'location_tracker.dart'; // Import LocationTracker for distance tracking
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,32 +54,27 @@ class AuthenticationWrapper extends StatefulWidget {
 }
 
 class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
-  late Stream<StepCount> _stepCountStream;
+  final LocationTracker locationTracker = LocationTracker();
+  double currentDistance = 0.0; // Distance in kilometers
 
   @override
   void initState() {
     super.initState();
     fetchFitnessData(); // Load data from Firestore
-    _initializePedometer();
-    checkAndResetData();
-  }
+    checkAndResetData(); // Check for reset at midnight
 
-  void _initializePedometer() {
-    _stepCountStream = Pedometer.stepCountStream;
-    _stepCountStream.listen(_onStepCount).onError(_onStepCountError);
-  }
-
-  void _onStepCount(StepCount event) {
-    setState(() {
-      steps.value = event.steps.toDouble(); // Update the `value` property of `steps`
-      caloriesBurnt.value = steps.value * 0.04; // Example: 0.04 calories per step
-      activeTime.value = steps.value / 100; // Example: 100 steps = 1 minute of activity
+    // Initialize location tracking
+    locationTracker.initLocationTracker().then((_) {
+      locationTracker.startTracking();
+    }).catchError((e) {
+      print('Error initializing location tracker: $e');
     });
   }
 
-
-  void _onStepCountError(dynamic error) {
-    print("StepCount Error: $error");
+  @override
+  void dispose() {
+    locationTracker.stopTracking(); // Stop location tracking
+    super.dispose();
   }
 
   @override
@@ -87,7 +82,13 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
     bool isLoggedIn = FirebaseAuth.instance.currentUser != null;
 
     if (isLoggedIn) {
-      return ChallengePage();
+      return StreamBuilder(
+        stream: Stream.periodic(Duration(seconds: 1)), // Periodic updates
+        builder: (context, snapshot) {
+          currentDistance = locationTracker.totalDistance / 1000; // Convert meters to km
+          return ChallengePage();
+        },
+      );
     } else {
       return LoginPage();
     }

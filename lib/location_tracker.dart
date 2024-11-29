@@ -1,4 +1,7 @@
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async'; 
 
 class LocationTracker {
   double totalDistance = 0.0; // Total distance in meters
@@ -56,4 +59,15 @@ class LocationTracker {
     positionStream?.cancel();
     positionStream = null;
   }
+
+  void saveDistanceToFirebase() async {
+  User? user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  await FirebaseFirestore.instance.collection('Users').doc(user.uid).set({
+    'totalDistance': totalDistance / 1000, // Save distance in kilometers
+    'lastUpdated': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
+
 }

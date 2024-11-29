@@ -6,6 +6,7 @@ import 'custom_bottom_navigation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'step_tracker.dart';
+import 'challenge1.dart';
 
 class ChallengePage extends StatefulWidget {
   @override
@@ -21,6 +22,9 @@ class _ChallengePageState extends State<ChallengePage> {
   final double _totalCaloriesBurnt = 400;
 
   Duration _timeLeft = Duration();
+
+  List<Map<String, dynamic>> acceptedChallenges = []; // List of maps to store challenge IDs and progress
+  Map<String, Map<String, dynamic>> challengesDetails = {}; // Cache for challenge details
 
   @override
   void initState() {
@@ -66,8 +70,6 @@ class _ChallengePageState extends State<ChallengePage> {
     });
   }
 
-
-
   @override
   void dispose() {
     _countdownTimer?.cancel(); // Cancel the timer when the widget is disposed
@@ -82,6 +84,44 @@ class _ChallengePageState extends State<ChallengePage> {
   /// Calculate progress for LinearProgressIndicator
   double _getProgress(double current, double total) {
     return (current / total).clamp(0.0, 1.0); // Ensure progress doesn't exceed 1.0
+  }
+
+  /// Fetch accepted challenges and their details
+  Future<void> _fetchAcceptedChallenges() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    DocumentSnapshot snapshot = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
+    if (snapshot.exists) {
+      Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
+      List<Map<String, dynamic>> challenges = List<Map<String, dynamic>>.from(data['acceptedChallenges'] ?? []);
+      setState(() {
+        acceptedChallenges = challenges;
+      });
+
+      // Fetch challenge details for accepted challenges
+      for (var challenge in challenges) {
+        String id = challenge['id'];
+        if (!challengesDetails.containsKey(id)) {
+          DocumentSnapshot challengeSnapshot = await FirebaseFirestore.instance.collection('Challenges').doc(id).get();
+          if (challengeSnapshot.exists) {
+            setState(() {
+              challengesDetails[id] = challengeSnapshot.data() as Map<String, dynamic>;
+            });
+          }
+        }
+      }
+    }
+  }
+
+  /// Save accepted challenges to Firebase
+  Future<void> _saveAcceptedChallenges() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    await FirebaseFirestore.instance.collection('Users').doc(user.uid).set({
+      'acceptedChallenges': acceptedChallenges,
+    }, SetOptions(merge: true));
   }
 
   @override
@@ -152,22 +192,104 @@ class _ChallengePageState extends State<ChallengePage> {
             _buildListItem('2. Active Time', activeTime, _totalActiveTime, screenWidth),
             SizedBox(height: 20), // Gap between items
             _buildListItem('3. Calories burnt', caloriesBurnt, _totalCaloriesBurnt, screenWidth),
-            SizedBox(height: 27), // Space below the last challenge item
+            SizedBox(height: 30), // Space below the Daily Challenge list
+
+            // Accepted Challenge Title and Horizontal Line
+            Text(
+              'Accepted Challenge',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.tealAccent,
+                shadows: [
+                  Shadow(
+                    blurRadius: 10.0,
+                    color: Colors.tealAccent.withOpacity(0.7),
+                    offset: Offset(0, 0),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 10), // Spacing between title and line
             Center(
-              child: Text(
-                'Reward: Sample Reward',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.tealAccent,
-                  shadows: [
-                    Shadow(
-                      blurRadius: 10.0,
-                      color: Colors.tealAccent.withOpacity(0.7),
-                      offset: Offset(0, 0),
-                    ),
-                  ],
-                ),
+              child: Container(
+                width: screenWidth * 0.95,
+                height: 2.0,
+                color: Colors.tealAccent.withOpacity(0.5),
+              ),
+            ),
+            SizedBox(height: 20), // Spacing between line and list
+
+            // Accepted Challenges
+            Expanded(
+              child: ListView.builder(
+                itemCount: 3, // Display 3 slots
+                itemBuilder: (context, index) {
+                  if (index < acceptedChallenges.length) {
+                    var challenge = acceptedChallenges[index];
+                    String id = challenge['id'];
+                    double progress = challenge['progress'];
+                    Map<String, dynamic>? details = challengesDetails[id];
+
+                    return Container(
+                      margin: EdgeInsets.only(bottom: 20.0),
+                      height: 80.0,
+                      decoration: BoxDecoration(
+                        color: Colors.tealAccent,
+                        borderRadius: BorderRadius.circular(10.0),
+                      ),
+                      child: Center(
+                        child: details != null
+                            ? Text(
+                                '${details['title']} - ${progress.toStringAsFixed(2)} / ${details['requirement']} km',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 18.0,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : CircularProgressIndicator(),
+                      ),
+                    );
+                  } else {
+                    return GestureDetector(
+                      onTap: () async {
+                        final selectedChallenge = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => Challenge1Page(),
+                          ),
+                        );
+
+                        if (selectedChallenge != null) {
+                          setState(() {
+                            acceptedChallenges.add({
+                              'id': selectedChallenge['id'],
+                              'progress': 0.0,
+                            });
+                            challengesDetails[selectedChallenge['id']] = selectedChallenge;
+                          });
+                          _saveAcceptedChallenges();
+                        }
+                      },
+                      child: Container(
+                        margin: EdgeInsets.only(bottom: 20.0),
+                        height: 80.0,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade800,
+                          borderRadius: BorderRadius.circular(10.0),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.add,
+                            size: 40.0,
+                            color: Colors.tealAccent,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                },
               ),
             ),
           ],
@@ -223,6 +345,24 @@ class _ChallengePageState extends State<ChallengePage> {
           ],
         );
       },
+    );
+  }
+
+  // Helper method to create a grey container with a "+" icon
+  Widget _buildGreyContainer() {
+    return Container(
+      height: 80.0, // Set the height of the container
+      decoration: BoxDecoration(
+        color: Colors.grey.shade800,
+        borderRadius: BorderRadius.circular(10.0),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.add,
+          size: 40.0,
+          color: Colors.tealAccent,
+        ),
+      ),
     );
   }
 }

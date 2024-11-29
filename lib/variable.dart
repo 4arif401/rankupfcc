@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 ValueNotifier<double> steps = ValueNotifier<double>(0.0);
 ValueNotifier<double> activeTime = ValueNotifier<double>(0.0);
 ValueNotifier<double> caloriesBurnt = ValueNotifier<double>(0.0);
+ValueNotifier<double> distance = ValueNotifier<double>(0.0);
 
 // Function to reset all variables
 Future<void> resetVariables() async {
