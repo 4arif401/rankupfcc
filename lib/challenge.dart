@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'step_tracker.dart';
 import 'challenge1.dart';
+import 'location_tracker.dart';
 
 class ChallengePage extends StatefulWidget {
   @override
@@ -23,16 +24,23 @@ class _ChallengePageState extends State<ChallengePage> {
 
   Duration _timeLeft = Duration();
 
-  List<Map<String, dynamic>> acceptedChallenges = []; // List of maps to store challenge IDs and progress
-  Map<String, Map<String, dynamic>> challengesDetails = {}; // Cache for challenge details
+  Map<String, dynamic>? acceptedChallenge; // Store the single accepted challenge
+  Map<String, dynamic>? challengeDetails; // Cache for challenge details
+
+  final LocationTracker locationTracker = LocationTracker(); // Instantiate LocationTracker
+  double initialDistance = 0.0; // Tracks the starting distance when a challenge is accepted
 
   @override
   void initState() {
     super.initState();
+    _fetchAcceptedChallenge();
     _startCountdown();
     _syncDataWithFirebase();
     fetchFitnessData();
     checkAndResetData();
+    locationTracker.initLocationTracker().then((_) {
+      locationTracker.startTrackingProgress(acceptedChallenge, _updateChallengeProgress);
+    });
   }
 
   /// Sync the local ValueNotifier data with Firebase whenever it changes.
@@ -86,42 +94,54 @@ class _ChallengePageState extends State<ChallengePage> {
     return (current / total).clamp(0.0, 1.0); // Ensure progress doesn't exceed 1.0
   }
 
-  /// Fetch accepted challenges and their details
-  Future<void> _fetchAcceptedChallenges() async {
+  /// Fetch the accepted challenge and its details
+  Future<void> _fetchAcceptedChallenge() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     DocumentSnapshot snapshot = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
     if (snapshot.exists) {
       Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-      List<Map<String, dynamic>> challenges = List<Map<String, dynamic>>.from(data['acceptedChallenges'] ?? []);
+      Map<String, dynamic>? challenge = (data['acceptedChallenge'] as Map<String, dynamic>?);
       setState(() {
-        acceptedChallenges = challenges;
+        acceptedChallenge = challenge;
       });
 
-      // Fetch challenge details for accepted challenges
-      for (var challenge in challenges) {
+      if (challenge != null) {
         String id = challenge['id'];
-        if (!challengesDetails.containsKey(id)) {
-          DocumentSnapshot challengeSnapshot = await FirebaseFirestore.instance.collection('Challenges').doc(id).get();
-          if (challengeSnapshot.exists) {
-            setState(() {
-              challengesDetails[id] = challengeSnapshot.data() as Map<String, dynamic>;
-            });
-          }
+        DocumentSnapshot challengeSnapshot = await FirebaseFirestore.instance.collection('Challenges').doc(id).get();
+        if (challengeSnapshot.exists) {
+          setState(() {
+            challengeDetails = challengeSnapshot.data() as Map<String, dynamic>;
+          });
         }
       }
     }
   }
 
-  /// Save accepted challenges to Firebase
-  Future<void> _saveAcceptedChallenges() async {
+  /// Save accepted challenge to Firebase
+  Future<void> _saveAcceptedChallenge() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     await FirebaseFirestore.instance.collection('Users').doc(user.uid).set({
-      'acceptedChallenges': acceptedChallenges,
+      'acceptedChallenge': acceptedChallenge,
     }, SetOptions(merge: true));
+  }
+
+  /// Update progress for all accepted challenges
+  void _updateChallengeProgress() {
+    if (acceptedChallenge != null) {
+      double currentDistance = locationTracker.totalDistance / 1000; // Convert to km
+      setState(() {
+        double startDistance = acceptedChallenge!['startDistance'] ?? 0.0; // Use stored start distance
+        acceptedChallenge!['progress'] = currentDistance - startDistance; // Calculate progress
+        if (acceptedChallenge!['progress'] < 0) {
+          acceptedChallenge!['progress'] = 0.0; // Ensure progress is not negative
+        }
+      });
+      _saveAcceptedChallenge(); // Save updated progress to Firebase
+    }
   }
 
   @override
@@ -218,80 +238,34 @@ class _ChallengePageState extends State<ChallengePage> {
                 color: Colors.tealAccent.withOpacity(0.5),
               ),
             ),
-            SizedBox(height: 20), // Spacing between line and list
+            SizedBox(height: 10),
 
-            // Accepted Challenges
-            Expanded(
-              child: ListView.builder(
-                itemCount: 3, // Display 3 slots
-                itemBuilder: (context, index) {
-                  if (index < acceptedChallenges.length) {
-                    var challenge = acceptedChallenges[index];
-                    String id = challenge['id'];
-                    double progress = challenge['progress'];
-                    Map<String, dynamic>? details = challengesDetails[id];
-
-                    return Container(
-                      margin: EdgeInsets.only(bottom: 20.0),
-                      height: 80.0,
-                      decoration: BoxDecoration(
-                        color: Colors.tealAccent,
-                        borderRadius: BorderRadius.circular(10.0),
-                      ),
-                      child: Center(
-                        child: details != null
-                            ? Text(
-                                '${details['title']} - ${progress.toStringAsFixed(2)} / ${details['requirement']} km',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 18.0,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            : CircularProgressIndicator(),
-                      ),
-                    );
-                  } else {
-                    return GestureDetector(
-                      onTap: () async {
-                        final selectedChallenge = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => Challenge1Page(),
-                          ),
-                        );
-
-                        if (selectedChallenge != null) {
-                          setState(() {
-                            acceptedChallenges.add({
-                              'id': selectedChallenge['id'],
-                              'progress': 0.0,
-                            });
-                            challengesDetails[selectedChallenge['id']] = selectedChallenge;
-                          });
-                          _saveAcceptedChallenges();
-                        }
-                      },
-                      child: Container(
-                        margin: EdgeInsets.only(bottom: 20.0),
-                        height: 80.0,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade800,
-                          borderRadius: BorderRadius.circular(10.0),
+            //Accepted Challenge
+            acceptedChallenge == null
+                ? GestureDetector(
+                    onTap: () async {
+                      final selectedChallenge = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => Challenge1Page(),
                         ),
-                        child: Center(
-                          child: Icon(
-                            Icons.add,
-                            size: 40.0,
-                            color: Colors.tealAccent,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ),
+                      );
+
+                      if (selectedChallenge != null) {
+                        setState(() {
+                          acceptedChallenge = {
+                            'id': selectedChallenge['id'],
+                            'progress': 0.0,
+                            'startDistance': locationTracker.totalDistance / 1000, // Store current distance
+                          };
+                          challengeDetails = selectedChallenge;
+                        });
+                        _saveAcceptedChallenge();
+                      }
+                    },
+                    child: _buildGreyContainer(),
+                  )
+                : _buildChallengeDetailCard(),
           ],
         ),
       ),
@@ -299,6 +273,53 @@ class _ChallengePageState extends State<ChallengePage> {
     );
   }
 
+  /// Build the container for the accepted challenge
+  Widget _buildChallengeDetailCard() {
+    double progress = acceptedChallenge!['progress'] as double;
+    String title = challengeDetails?['title'] ?? 'Unknown Challenge';
+    double requirement = challengeDetails?['requirement']?.toDouble() ?? 0.0;
+
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 20.0),
+      padding: EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.teal.shade500, Colors.teal.shade800],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(15.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.teal.withOpacity(0.3),
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Progress: ${progress.toStringAsFixed(2)} / ${requirement.toStringAsFixed(2)} km',
+            style: TextStyle(fontSize: 16, color: Colors.tealAccent),
+          ),
+          SizedBox(height: 10),
+          LinearProgressIndicator(
+            value: progress / requirement,
+            backgroundColor: Colors.white12,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent),
+          ),
+        ],
+      ),
+    );
+  }
+  
   /// Build list item with ValueNotifier support
   Widget _buildListItem(String title, ValueNotifier<double> valueNotifier, double maxValue, double screenWidth) {
     return ValueListenableBuilder<double>(
@@ -349,20 +370,22 @@ class _ChallengePageState extends State<ChallengePage> {
   }
 
   // Helper method to create a grey container with a "+" icon
+  /// Build the grey container with "+" icon for selecting a challenge
   Widget _buildGreyContainer() {
     return Container(
-      height: 80.0, // Set the height of the container
+      height: 100.0,
       decoration: BoxDecoration(
         color: Colors.grey.shade800,
-        borderRadius: BorderRadius.circular(10.0),
+        borderRadius: BorderRadius.circular(15.0),
       ),
       child: Center(
         child: Icon(
           Icons.add,
-          size: 40.0,
+          size: 50.0,
           color: Colors.tealAccent,
         ),
       ),
     );
   }
 }
+
