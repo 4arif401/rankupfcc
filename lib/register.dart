@@ -45,6 +45,10 @@ class RegisterPage extends StatelessWidget {
           'username': username,
           'createdAt': todayDate,
           'lastResetDate': todayDate,
+          'rating': 0,
+          'level': 1,
+          'exp': 0,
+          'totalexp': 0,
         });
 
         _showMessage(context, 'Registration and Firestore save successful!');
