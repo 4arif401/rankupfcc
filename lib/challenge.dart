@@ -99,6 +99,106 @@ class _ChallengePageState extends State<ChallengePage> {
     return (current / total).clamp(0.0, 1.0); // Ensure progress doesn't exceed 1.0
   }
 
+  void _handleChallengeTap({
+    required bool isSolo,
+    Map<String, dynamic>? challenge,
+    Map<String, dynamic>? details,
+  }) async {
+    if (isSolo) {
+      if (acceptedChallenge == null) {
+        final selectedChallenge = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => Challenge1Page()),
+        );
+
+        if (selectedChallenge != null) {
+          setState(() {
+            acceptedChallenge = {
+              'id': selectedChallenge['id'],
+              'progress': 0.0,
+              'startStepsKm': stepsToKm(steps.value.toInt()), // Save current steps converted to km
+            };
+            challengeDetails = selectedChallenge;
+          });
+          _saveAcceptedChallenge();
+        }
+      }
+    } else {
+      if (acceptedCoopChallenge == null) {
+        final selectedFriendId = await _selectFriend();
+        if (selectedFriendId != null) {
+          final selectedChallenge = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => Challenge1Page()),
+          );
+
+          if (selectedChallenge != null) {
+            await _saveCoopChallengeProgress();
+          }
+        }
+      }
+    }
+  }
+
+  Widget _buildChallengeCard(
+    String title,
+    Map<String, dynamic>? challenge,
+    Map<String, dynamic>? details,
+    Color gradientStart,
+    Color gradientEnd,
+    bool isSolo,
+  ) {
+    // If no challenge is accepted, show the grey container
+    if (challenge == null) {
+      return GestureDetector(
+        onTap: () {
+          _handleChallengeTap(isSolo: isSolo, challenge: challenge, details: details);
+        },
+        child: _buildGreyContainer(),
+      );
+    }
+
+    double progress = challenge['progress'] ?? 0.0;
+    double requirement = details?['requirement']?.toDouble() ?? 0.0;
+
+    return GestureDetector(
+      onTap: () {
+        _handleChallengeTap(isSolo: isSolo, challenge: challenge, details: details);
+      },
+      child: Container(
+        margin: EdgeInsets.symmetric(vertical: 10.0),
+        padding: EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [gradientStart, gradientEnd]),
+          borderRadius: BorderRadius.circular(15.0),
+          boxShadow: [
+            BoxShadow(color: gradientStart.withOpacity(0.3), blurRadius: 10, offset: Offset(0, 5)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(details?['title'] ?? 'Unknown Challenge',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+            SizedBox(height: 10),
+            Text(
+              'Progress: ${progress.toStringAsFixed(2)} / ${requirement.toStringAsFixed(2)} km',
+              style: TextStyle(fontSize: 16, color: Colors.tealAccent),
+            ),
+            SizedBox(height: 10),
+            LinearProgressIndicator(
+              value: (progress / requirement).clamp(0.0, 1.0),
+              backgroundColor: Colors.white12,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
   /// Fetch the accepted challenge and its details
   Future<void> _fetchAcceptedChallenge() async {
     User? user = FirebaseAuth.instance.currentUser;
@@ -264,20 +364,137 @@ class _ChallengePageState extends State<ChallengePage> {
   void _updateChallengeProgress() {
     double currentKm = stepsToKm(steps.value.toInt());
 
+    // Handle Solo Challenge
     if (acceptedChallenge != null) {
       double startKm = acceptedChallenge!['startStepsKm'] ?? 0.0;
       acceptedChallenge!['progress'] = (currentKm - startKm).clamp(0.0, double.infinity);
-      _saveAcceptedChallenge();
+
+      if (acceptedChallenge!['progress'] >= (challengeDetails?['requirement']?.toDouble() ?? double.infinity)) {
+        _completeSoloChallenge();
+      } else {
+        _saveAcceptedChallenge();
+      }
     }
 
+    // Handle Co-op Challenge
     if (acceptedCoopChallenge != null) {
       double startKm = acceptedCoopChallenge!['startStepsKm'] ?? 0.0;
       acceptedCoopChallenge!['progress'] = (currentKm - startKm).clamp(0.0, double.infinity);
-      _saveCoopChallengeProgress();
+
+      if (acceptedCoopChallenge!['progress'] >= (coopChallengeDetails?['requirement']?.toDouble() ?? double.infinity)) {
+        _completeCoopChallenge();
+      } else {
+        _saveCoopChallengeProgress();
+      }
     }
 
     setState(() {}); // Trigger UI update
   }
+
+  Future<void> _completeSoloChallenge() async {
+  try {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null || acceptedChallenge == null) return;
+
+    // Retrieve the reward from challenge details
+    int reward = challengeDetails?['reward'] ?? 0;
+
+    await FirebaseFirestore.instance.collection('Users').doc(user.uid).update({
+      'completedChallenge': FieldValue.arrayUnion([acceptedChallenge!['id']]),
+      'acceptedChallenge': FieldValue.delete(),
+      'exp': FieldValue.increment(reward), // Add reward to user exp
+    });
+
+    setState(() {
+      acceptedChallenge = null;
+      challengeDetails = null;
+    });
+
+    // Show completion message with animation
+    _showCompletionMessage(context, "Challenge Completed!", "You gained $reward EXP!");
+  } catch (e) {
+    print('Error completing solo challenge: $e');
+  }
+}
+
+
+  Future<void> _completeCoopChallenge() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null || acceptedCoopChallenge == null) return;
+
+      String friendId = acceptedCoopChallenge!['friendid'];
+
+      // Retrieve the reward from challenge details
+      int reward = coopChallengeDetails?['reward'] ?? 0;
+
+      // Update both user's and friend's data
+      await FirebaseFirestore.instance.collection('Users').doc(user.uid).update({
+        'completedChallenge': FieldValue.arrayUnion([acceptedCoopChallenge!['id']]),
+        'acceptedChallenge2': FieldValue.delete(),
+        'exp': FieldValue.increment(reward), // Add reward to user exp
+      });
+
+      await FirebaseFirestore.instance.collection('Users').doc(friendId).update({
+        'completedChallenge': FieldValue.arrayUnion([acceptedCoopChallenge!['id']]),
+        'acceptedChallenge2': FieldValue.delete(),
+        'exp': FieldValue.increment(reward), // Add reward to friend exp
+      });
+
+      setState(() {
+        acceptedCoopChallenge = null;
+        coopChallengeDetails = null;
+      });
+
+      // Show completion message with animation
+      _showCompletionMessage(context, "Co-op Challenge Completed!", "You and your friend each gained $reward EXP!");
+    } catch (e) {
+      print('Error completing co-op challenge: $e');
+    }
+  }
+
+  void _showCompletionMessage(BuildContext context, String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.teal.shade700,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.greenAccent, size: 30),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Text(
+              message,
+              style: TextStyle(color: Colors.white70, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                "OK",
+                style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
 
   @override
@@ -353,12 +570,24 @@ class _ChallengePageState extends State<ChallengePage> {
             
 
             Text('Solo Challenge', style: _headerStyle),
-            _buildChallengeCard('Solo Challenge', acceptedChallenge, challengeDetails,
-                Colors.teal.shade500, Colors.teal.shade800),
+            _buildChallengeCard(
+              'Solo Challenge',
+              acceptedChallenge,
+              challengeDetails,
+              Colors.teal.shade500,
+              Colors.teal.shade800,
+              true, // isSolo
+            ),
             SizedBox(height: 20),
             Text('Co-op Challenge', style: _headerStyle),
-            _buildChallengeCard('Co-op Challenge', acceptedCoopChallenge, coopChallengeDetails,
-                Colors.blueGrey.shade500, Colors.blueGrey.shade800),
+            _buildChallengeCard(
+              'Co-op Challenge',
+              acceptedCoopChallenge,
+              coopChallengeDetails,
+              Colors.blueGrey.shade500,
+              Colors.blueGrey.shade800,
+              false, // isSolo
+            ),
             /*// Accepted Challenge Title and Horizontal Line
             Text(
               'Solo Challenge',
@@ -686,7 +915,7 @@ class _ChallengePageState extends State<ChallengePage> {
 }
 
 /// Build UI components for Solo and Co-op Challenges
-  Widget _buildChallengeCard(String title, Map<String, dynamic>? challenge,
+  /*Widget _buildChallengeCard(String title, Map<String, dynamic>? challenge,
       Map<String, dynamic>? details, Color gradientStart, Color gradientEnd) {
     if (challenge == null) {
       return _buildGreyContainer();
@@ -722,7 +951,9 @@ class _ChallengePageState extends State<ChallengePage> {
         ],
       ),
     );
-  }
+  } */
+
+ 
 
   Widget _buildGreyContainer() {
     return Container(
