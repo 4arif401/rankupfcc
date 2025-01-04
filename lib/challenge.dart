@@ -85,6 +85,7 @@ class _ChallengePageState extends State<ChallengePage> {
   @override
   void dispose() {
     _countdownTimer?.cancel(); // Cancel the timer when the widget is disposed
+    steps.removeListener(_updateChallengeProgress);
     super.dispose();
   }
 
@@ -132,14 +133,19 @@ class _ChallengePageState extends State<ChallengePage> {
   }
 
 
-  /// Save accepted challenge to Firebase
+  /// Save Solo Challenge progress
   Future<void> _saveAcceptedChallenge() async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null || acceptedChallenge == null) return;
 
-    await FirebaseFirestore.instance.collection('Users').doc(user.uid).set({
-      'acceptedChallenge': acceptedChallenge,
-    }, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(user.uid)
+          .set({'acceptedChallenge': acceptedChallenge}, SetOptions(merge: true));
+    } catch (e) {
+      print('Error saving accepted challenge: $e');
+    }
   }
 
   // Friend Selection Modal
@@ -212,43 +218,29 @@ class _ChallengePageState extends State<ChallengePage> {
   }
 
 
-  // Save Co-op Challenge to Firestore
-  Future<void> _saveCoopChallenge(String friendId, Map<String, dynamic> challenge) async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  /// Save Co-op Challenge progress
+  Future<void> _saveCoopChallengeProgress() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null || acceptedCoopChallenge == null) return;
 
-    Map<String, dynamic> coopChallenge = {
-      'id': challenge['id'],
-      'progress': 0.0,
-      'friendid': friendId,
-      'startStepsKm': stepsToKm(steps.value.toInt()), // Save current steps converted to km
-    };
+      String friendId = acceptedCoopChallenge!['friendid'];
 
-    // Save to current user's document
-    await FirebaseFirestore.instance
-        .collection('Users')
-        .doc(user.uid)
-        .set({'acceptedChallenge2': coopChallenge}, SetOptions(merge: true));
+      // Update both user's and friend's progress
+      await FirebaseFirestore.instance.collection('Users').doc(user.uid).set({
+        'acceptedChallenge2': acceptedCoopChallenge,
+      }, SetOptions(merge: true));
 
-    // Save to friend's document with user's ID as `friendid`
-    await FirebaseFirestore.instance
-        .collection('Users')
-        .doc(friendId)
-        .set({
-          'acceptedChallenge2': {
-            'id': challenge['id'],
-            'progress': 0.0,
-            'friendid': user.uid,
-          },
-        }, SetOptions(merge: true));
-
-    setState(() {
-      acceptedCoopChallenge = coopChallenge;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Co-op challenge accepted with your friend!')),
-    );
+      await FirebaseFirestore.instance.collection('Users').doc(friendId).set({
+        'acceptedChallenge2': {
+          'id': acceptedCoopChallenge!['id'],
+          'progress': acceptedCoopChallenge!['progress'],
+          'friendid': user.uid,
+        },
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error saving Co-op challenge progress: $e');
+    }
   }
 
   Future<void> _fetchAcceptedCoopChallenge() async {
@@ -268,33 +260,23 @@ class _ChallengePageState extends State<ChallengePage> {
     return steps * 0.0008; // 1 step = 0.0008 km
   }
 
-  /// Update progress for all accepted challenges
+  /// Update progress for Solo and Co-op Challenges
   void _updateChallengeProgress() {
-    if (acceptedChallenge != null) {
-      setState(() {
-        double currentKm = stepsToKm(steps.value.toInt()); // Convert steps to km
-        double startKm = acceptedChallenge!['startStepsKm'] ?? 0.0; // Use stored start steps converted to km
-        acceptedChallenge!['progress'] = currentKm - startKm; // Calculate progress
+    double currentKm = stepsToKm(steps.value.toInt());
 
-        if (acceptedChallenge!['progress'] < 0) {
-          acceptedChallenge!['progress'] = 0.0; // Ensure progress is not negative
-        }
-      });
-      _saveAcceptedChallenge(); // Save updated progress to Firebase
+    if (acceptedChallenge != null) {
+      double startKm = acceptedChallenge!['startStepsKm'] ?? 0.0;
+      acceptedChallenge!['progress'] = (currentKm - startKm).clamp(0.0, double.infinity);
+      _saveAcceptedChallenge();
     }
 
     if (acceptedCoopChallenge != null) {
-      setState(() {
-        double currentKm = stepsToKm(steps.value.toInt()); // Convert steps to km
-        double startKm = acceptedCoopChallenge!['startStepsKm'] ?? 0.0; // Use stored start steps converted to km
-        acceptedCoopChallenge!['progress'] = currentKm - startKm; // Calculate progress
-
-        if (acceptedCoopChallenge!['progress'] < 0) {
-          acceptedCoopChallenge!['progress'] = 0.0; // Ensure progress is not negative
-        }
-      });
-      _saveAcceptedChallenge(); // Save updated co-op progress to Firebase
+      double startKm = acceptedCoopChallenge!['startStepsKm'] ?? 0.0;
+      acceptedCoopChallenge!['progress'] = (currentKm - startKm).clamp(0.0, double.infinity);
+      _saveCoopChallengeProgress();
     }
+
+    setState(() {}); // Trigger UI update
   }
 
 
@@ -367,8 +349,17 @@ class _ChallengePageState extends State<ChallengePage> {
             SizedBox(height: 20), // Gap between items
             _buildListItem('3. Calories burnt', caloriesBurnt, _totalCaloriesBurnt, screenWidth),
             SizedBox(height: 30), // Space below the Daily Challenge list
+            
+            
 
-            // Accepted Challenge Title and Horizontal Line
+            Text('Solo Challenge', style: _headerStyle),
+            _buildChallengeCard('Solo Challenge', acceptedChallenge, challengeDetails,
+                Colors.teal.shade500, Colors.teal.shade800),
+            SizedBox(height: 20),
+            Text('Co-op Challenge', style: _headerStyle),
+            _buildChallengeCard('Co-op Challenge', acceptedCoopChallenge, coopChallengeDetails,
+                Colors.blueGrey.shade500, Colors.blueGrey.shade800),
+            /*// Accepted Challenge Title and Horizontal Line
             Text(
               'Solo Challenge',
               style: TextStyle(
@@ -466,16 +457,23 @@ class _ChallengePageState extends State<ChallengePage> {
                     child: _buildGreyContainer(),
                   )
                 : _buildCoopChallengeDetailCard(),
-
+              */
           ],
         ),
       ),
       bottomNavigationBar: CustomBottomNavigationBar(currentIndex: 0),
     );
   }
+
+  TextStyle get _headerStyle => TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.bold,
+        color: Colors.tealAccent,
+        shadows: [Shadow(blurRadius: 10.0, color: Colors.tealAccent.withOpacity(0.7))],
+      );
   
   // Inside the ChallengePage Widget
-  Widget _buildCoopChallengeSection() {
+  /*Widget _buildCoopChallengeSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -522,7 +520,7 @@ class _ChallengePageState extends State<ChallengePage> {
         ),
       ],
     );
-  }
+  }*/
   
   /// Build the container for the accepted challenge
   Widget _buildChallengeDetailCard() {
@@ -669,7 +667,7 @@ class _ChallengePageState extends State<ChallengePage> {
 
   // Helper method to create a grey container with a "+" icon
   /// Build the grey container with "+" icon for selecting a challenge
-  Widget _buildGreyContainer() {
+  /*Widget _buildGreyContainer() {
     return Container(
       height: 100.0,
       decoration: BoxDecoration(
@@ -684,6 +682,54 @@ class _ChallengePageState extends State<ChallengePage> {
         ),
       ),
     );
-  }
+  }*/
 }
 
+/// Build UI components for Solo and Co-op Challenges
+  Widget _buildChallengeCard(String title, Map<String, dynamic>? challenge,
+      Map<String, dynamic>? details, Color gradientStart, Color gradientEnd) {
+    if (challenge == null) {
+      return _buildGreyContainer();
+    }
+
+    double progress = challenge['progress'] ?? 0.0;
+    double requirement = details?['requirement']?.toDouble() ?? 0.0;
+
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 10.0),
+      padding: EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [gradientStart, gradientEnd]),
+        borderRadius: BorderRadius.circular(15.0),
+        boxShadow: [
+          BoxShadow(color: gradientStart.withOpacity(0.3), blurRadius: 10, offset: Offset(0, 5)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(details?['title'] ?? 'Unknown Challenge',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+          SizedBox(height: 10),
+          Text('Progress: ${progress.toStringAsFixed(2)} / ${requirement.toStringAsFixed(2)} km',
+              style: TextStyle(fontSize: 16, color: Colors.tealAccent)),
+          SizedBox(height: 10),
+          LinearProgressIndicator(
+            value: (progress / requirement).clamp(0.0, 1.0),
+            backgroundColor: Colors.white12,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGreyContainer() {
+    return Container(
+      height: 100.0,
+      decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(15.0)),
+      child: Center(
+        child: Icon(Icons.add, size: 50.0, color: Colors.tealAccent),
+      ),
+    );
+  }
