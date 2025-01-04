@@ -1,10 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class Challenge1Page extends StatelessWidget {
+class Challenge1Page extends StatefulWidget {
+  @override
+  _Challenge1PageState createState() => _Challenge1PageState();
+}
+
+class _Challenge1PageState extends State<Challenge1Page> {
+  List<String> completedChallenges = []; // To store the completed challenge IDs
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCompletedChallenges();
+  }
+
+  // Fetch completed challenges for the current user
+  Future<void> _fetchCompletedChallenges() async {
+    try {
+      String? userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) return;
+
+      // Get the completedChallenge array from Firestore
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('Users').doc(userId).get();
+      if (userDoc.exists) {
+        List<dynamic> completed = userDoc['completedChallenge'] ?? [];
+        setState(() {
+          completedChallenges = completed.map((e) => e.toString()).toList();
+        });
+      }
+    } catch (e) {
+      print('Error fetching completed challenges: $e');
+    }
+  }
+
+  // Fetch all challenges and filter out completed ones
   Future<List<Map<String, dynamic>>> _fetchChallenges() async {
     QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('Challenges').get();
+
     return snapshot.docs
+        .where((doc) => !completedChallenges.contains(doc.id)) // Filter out completed challenges
         .map((doc) => {
               ...doc.data() as Map<String, dynamic>,
               'id': doc.id, // Include the document ID
@@ -26,7 +62,7 @@ class Challenge1Page extends StatelessWidget {
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _fetchChallenges(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting || completedChallenges.isEmpty) {
             return Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {

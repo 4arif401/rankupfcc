@@ -26,6 +26,9 @@ class _ChallengePageState extends State<ChallengePage> {
 
   Map<String, dynamic>? acceptedChallenge; // Store the single accepted challenge
   Map<String, dynamic>? challengeDetails; // Cache for challenge details
+  Map<String, dynamic>? acceptedCoopChallenge;
+  Map<String, dynamic>? coopChallengeDetails;
+
 
   final LocationTracker locationTracker = LocationTracker(); // Instantiate LocationTracker
   double initialDistance = 0.0; // Tracks the starting distance when a challenge is accepted
@@ -38,8 +41,9 @@ class _ChallengePageState extends State<ChallengePage> {
     _syncDataWithFirebase();
     fetchFitnessData();
     checkAndResetData();
-    locationTracker.initLocationTracker().then((_) {
-      locationTracker.startTrackingProgress(acceptedChallenge, _updateChallengeProgress);
+    // Listen to step changes to update progress
+    steps.addListener(() {
+      _updateChallengeProgress();
     });
   }
 
@@ -102,22 +106,31 @@ class _ChallengePageState extends State<ChallengePage> {
     DocumentSnapshot snapshot = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
     if (snapshot.exists) {
       Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-      Map<String, dynamic>? challenge = (data['acceptedChallenge'] as Map<String, dynamic>?);
+
       setState(() {
-        acceptedChallenge = challenge;
+        acceptedChallenge = data['acceptedChallenge'];
+        acceptedCoopChallenge = data['acceptedChallenge2'];
       });
 
-      if (challenge != null) {
-        String id = challenge['id'];
-        DocumentSnapshot challengeSnapshot = await FirebaseFirestore.instance.collection('Challenges').doc(id).get();
-        if (challengeSnapshot.exists) {
-          setState(() {
-            challengeDetails = challengeSnapshot.data() as Map<String, dynamic>;
-          });
-        }
+      // Fetch challenge details
+      if (acceptedChallenge != null) {
+        String id = acceptedChallenge!['id'];
+        challengeDetails = await _fetchChallengeDetails(id);
+      }
+
+      if (acceptedCoopChallenge != null) {
+        String coopId = acceptedCoopChallenge!['id'];
+        coopChallengeDetails = await _fetchChallengeDetails(coopId);
       }
     }
   }
+
+  Future<Map<String, dynamic>> _fetchChallengeDetails(String challengeId) async {
+    DocumentSnapshot challengeSnapshot =
+        await FirebaseFirestore.instance.collection('Challenges').doc(challengeId).get();
+    return challengeSnapshot.exists ? challengeSnapshot.data() as Map<String, dynamic> : {};
+  }
+
 
   /// Save accepted challenge to Firebase
   Future<void> _saveAcceptedChallenge() async {
@@ -129,20 +142,161 @@ class _ChallengePageState extends State<ChallengePage> {
     }, SetOptions(merge: true));
   }
 
+  // Friend Selection Modal
+  Future<String?> _selectFriend() async {
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return null;
+
+    return await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance.collection('Users').doc(userId).get(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+
+            List<dynamic> friendsList = snapshot.data!['friendsList'] ?? [];
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.6,
+              padding: EdgeInsets.all(16.0),
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _fetchFriendsUsernames(friendsList),
+                builder: (context, friendsSnapshot) {
+                  if (!friendsSnapshot.hasData) return Center(child: CircularProgressIndicator());
+
+                  final friendsData = friendsSnapshot.data!;
+                  return ListView.builder(
+                    itemCount: friendsData.length,
+                    itemBuilder: (context, index) {
+                      final friend = friendsData[index];
+                      return ListTile(
+                        leading: Icon(Icons.account_circle, color: Colors.tealAccent),
+                        title: Text(
+                          friend['username'] ?? 'Unknown',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Text(friend['email'] ?? 'No email'),
+                        trailing: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, friend['id']),
+                          child: Text('Select'),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Fetch friend usernames
+  Future<List<Map<String, dynamic>>> _fetchFriendsUsernames(List<dynamic> friendIds) async {
+    List<Map<String, dynamic>> friendsData = [];
+
+    for (String id in friendIds) {
+      DocumentSnapshot snapshot = await FirebaseFirestore.instance.collection('Users').doc(id).get();
+      if (snapshot.exists) {
+        friendsData.add({
+          'id': id,
+          ...snapshot.data() as Map<String, dynamic>, // Add username, email, etc.
+        });
+      }
+    }
+
+    return friendsData;
+  }
+
+
+  // Save Co-op Challenge to Firestore
+  Future<void> _saveCoopChallenge(String friendId, Map<String, dynamic> challenge) async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    Map<String, dynamic> coopChallenge = {
+      'id': challenge['id'],
+      'progress': 0.0,
+      'friendid': friendId,
+      'startStepsKm': stepsToKm(steps.value.toInt()), // Save current steps converted to km
+    };
+
+    // Save to current user's document
+    await FirebaseFirestore.instance
+        .collection('Users')
+        .doc(user.uid)
+        .set({'acceptedChallenge2': coopChallenge}, SetOptions(merge: true));
+
+    // Save to friend's document with user's ID as `friendid`
+    await FirebaseFirestore.instance
+        .collection('Users')
+        .doc(friendId)
+        .set({
+          'acceptedChallenge2': {
+            'id': challenge['id'],
+            'progress': 0.0,
+            'friendid': user.uid,
+          },
+        }, SetOptions(merge: true));
+
+    setState(() {
+      acceptedCoopChallenge = coopChallenge;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Co-op challenge accepted with your friend!')),
+    );
+  }
+
+  Future<void> _fetchAcceptedCoopChallenge() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    DocumentSnapshot snapshot =
+        await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
+    if (snapshot.exists) {
+      setState(() {
+        acceptedCoopChallenge = snapshot['acceptedChallenge2'];
+      });
+    }
+  }
+
+  double stepsToKm(int steps) {
+    return steps * 0.0008; // 1 step = 0.0008 km
+  }
+
   /// Update progress for all accepted challenges
   void _updateChallengeProgress() {
     if (acceptedChallenge != null) {
-      double currentDistance = locationTracker.totalDistance / 1000; // Convert to km
       setState(() {
-        double startDistance = acceptedChallenge!['startDistance'] ?? 0.0; // Use stored start distance
-        acceptedChallenge!['progress'] = currentDistance - startDistance; // Calculate progress
+        double currentKm = stepsToKm(steps.value.toInt()); // Convert steps to km
+        double startKm = acceptedChallenge!['startStepsKm'] ?? 0.0; // Use stored start steps converted to km
+        acceptedChallenge!['progress'] = currentKm - startKm; // Calculate progress
+
         if (acceptedChallenge!['progress'] < 0) {
           acceptedChallenge!['progress'] = 0.0; // Ensure progress is not negative
         }
       });
       _saveAcceptedChallenge(); // Save updated progress to Firebase
     }
+
+    if (acceptedCoopChallenge != null) {
+      setState(() {
+        double currentKm = stepsToKm(steps.value.toInt()); // Convert steps to km
+        double startKm = acceptedCoopChallenge!['startStepsKm'] ?? 0.0; // Use stored start steps converted to km
+        acceptedCoopChallenge!['progress'] = currentKm - startKm; // Calculate progress
+
+        if (acceptedCoopChallenge!['progress'] < 0) {
+          acceptedCoopChallenge!['progress'] = 0.0; // Ensure progress is not negative
+        }
+      });
+      _saveAcceptedChallenge(); // Save updated co-op progress to Firebase
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -162,7 +316,7 @@ class _ChallengePageState extends State<ChallengePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 50),
+            SizedBox(height: 40),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -216,7 +370,7 @@ class _ChallengePageState extends State<ChallengePage> {
 
             // Accepted Challenge Title and Horizontal Line
             Text(
-              'Accepted Challenge',
+              'Solo Challenge',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -256,7 +410,7 @@ class _ChallengePageState extends State<ChallengePage> {
                           acceptedChallenge = {
                             'id': selectedChallenge['id'],
                             'progress': 0.0,
-                            'startDistance': locationTracker.totalDistance / 1000, // Store current distance
+                            'startStepsKm': stepsToKm(steps.value.toInt()), // Save current steps converted to km
                           };
                           challengeDetails = selectedChallenge;
                         });
@@ -266,13 +420,110 @@ class _ChallengePageState extends State<ChallengePage> {
                     child: _buildGreyContainer(),
                   )
                 : _buildChallengeDetailCard(),
+            //_buildCoopChallengeSection(),
+            SizedBox(height: 15),
+            // Co-op Challenge Section
+            Text(
+              'Co-op Challenge',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.tealAccent,
+                shadows: [
+                  Shadow(
+                    blurRadius: 10.0,
+                    color: Colors.tealAccent.withOpacity(0.7),
+                    offset: Offset(0, 0),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 10),
+            Center(
+              child: Container(
+                width: screenWidth * 0.95,
+                height: 2.0,
+                color: Colors.tealAccent.withOpacity(0.5),
+              ),
+            ),
+            SizedBox(height: 10),
+
+            acceptedCoopChallenge == null
+                ? GestureDetector(
+                    onTap: () async {
+                      final selectedFriendId = await _selectFriend();
+                      if (selectedFriendId != null) {
+                        final selectedChallenge = await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => Challenge1Page()),
+                        );
+
+                        if (selectedChallenge != null) {
+                          await _saveCoopChallenge(selectedFriendId, selectedChallenge);
+                        }
+                      }
+                    },
+                    child: _buildGreyContainer(),
+                  )
+                : _buildCoopChallengeDetailCard(),
+
           ],
         ),
       ),
       bottomNavigationBar: CustomBottomNavigationBar(currentIndex: 0),
     );
   }
+  
+  // Inside the ChallengePage Widget
+  Widget _buildCoopChallengeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 20), // Spacing
+        Text(
+          'Co-op Challenge',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.tealAccent,
+            shadows: [
+              Shadow(
+                blurRadius: 10.0,
+                color: Colors.tealAccent.withOpacity(0.7),
+                offset: Offset(0, 0),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 10),
+        Center(
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.95,
+            height: 2.0,
+            color: Colors.tealAccent.withOpacity(0.5),
+          ),
+        ),
+        SizedBox(height: 10),
+        GestureDetector(
+          onTap: () async {
+            final selectedFriendId = await _selectFriend(); // Show friend selection
+            if (selectedFriendId != null) {
+              final selectedChallenge = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => Challenge1Page()),
+              );
 
+              if (selectedChallenge != null) {
+                await _saveCoopChallenge(selectedFriendId, selectedChallenge);
+              }
+            }
+          },
+          child: _buildGreyContainer(),
+        ),
+      ],
+    );
+  }
+  
   /// Build the container for the accepted challenge
   Widget _buildChallengeDetailCard() {
     double progress = acceptedChallenge!['progress'] as double;
@@ -280,7 +531,7 @@ class _ChallengePageState extends State<ChallengePage> {
     double requirement = challengeDetails?['requirement']?.toDouble() ?? 0.0;
 
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 20.0),
+      margin: EdgeInsets.symmetric(vertical: 5.0),
       padding: EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -319,6 +570,53 @@ class _ChallengePageState extends State<ChallengePage> {
       ),
     );
   }
+
+  Widget _buildCoopChallengeDetailCard() {
+    double progress = acceptedCoopChallenge!['progress'] as double;
+    String title = coopChallengeDetails?['title'] ?? 'Unknown Challenge';
+    double requirement = coopChallengeDetails?['requirement']?.toDouble() ?? 0.0;
+
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 5.0),
+      padding: EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blueGrey.shade500, Colors.blueGrey.shade800],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(15.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blueGrey.withOpacity(0.3),
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          SizedBox(height: 10),
+          Text(
+            'Progress: ${progress.toStringAsFixed(2)} / ${requirement.toStringAsFixed(2)} km',
+            style: TextStyle(fontSize: 16, color: Colors.tealAccent),
+          ),
+          SizedBox(height: 10),
+          LinearProgressIndicator(
+            value: progress / requirement,
+            backgroundColor: Colors.white12,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent),
+          ),
+        ],
+      ),
+    );
+  }
+
   
   /// Build list item with ValueNotifier support
   Widget _buildListItem(String title, ValueNotifier<double> valueNotifier, double maxValue, double screenWidth) {
