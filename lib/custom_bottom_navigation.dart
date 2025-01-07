@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'challenge.dart'; // Import your ChallengePage
 import 'profile.dart'; // Import your ProfilePage
 import 'friends.dart'; // Import your FriendsPage (create this page if it doesn't exist)
+import 'leaderboard.dart'; // Import your LeaderboardPage
 
 class CustomBottomNavigationBar extends StatelessWidget {
   final int currentIndex; // To highlight the current tab
@@ -18,10 +19,16 @@ class CustomBottomNavigationBar extends StatelessWidget {
     } else if (index == 1) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => FriendsPage()), // Navigate to FriendsPage
+        MaterialPageRoute(builder: (context) => LeaderboardPage()), // Navigate to LeaderboardPage
         (route) => false,
       );
     } else if (index == 2) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => FriendsPage()), // Navigate to FriendsPage
+        (route) => false,
+      );
+    } else if (index == 3) {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => ProfilePage()),
@@ -38,6 +45,10 @@ class CustomBottomNavigationBar extends StatelessWidget {
         BottomNavigationBarItem(
           icon: Icon(Icons.fitness_center, color: Colors.tealAccent),
           label: 'Challenge',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.leaderboard, color: Colors.tealAccent), // Icon for leaderboard
+          label: 'Leaderboard',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.group, color: Colors.tealAccent), // Icon for friends

@@ -274,7 +274,7 @@ class _FriendsPageState extends State<FriendsPage> {
           ),
         ],
       ),
-      bottomNavigationBar: CustomBottomNavigationBar(currentIndex: 1),
+      bottomNavigationBar: CustomBottomNavigationBar(currentIndex: 2),
     );
   }
 }

@@ -21,6 +21,7 @@ class _ChallengePageState extends State<ChallengePage> {
   final double _totalSteps = 6000;
   final double _totalActiveTime = 90;
   final double _totalCaloriesBurnt = 400;
+  Set<String> _completedDailyChallenges = {};
 
   Duration _timeLeft = Duration();
 
@@ -44,7 +45,17 @@ class _ChallengePageState extends State<ChallengePage> {
     // Listen to step changes to update progress
     steps.addListener(() {
       _updateChallengeProgress();
+      _updateDailyChallengeProgress();
     });
+
+    activeTime.addListener(() {
+      _updateDailyChallengeProgress();
+    });
+
+    caloriesBurnt.addListener(() {
+      _updateDailyChallengeProgress();
+    });
+
   }
 
   /// Sync the local ValueNotifier data with Firebase whenever it changes.
@@ -360,6 +371,49 @@ class _ChallengePageState extends State<ChallengePage> {
     return steps * 0.0008; // 1 step = 0.0008 km
   }
 
+  Future<void> _handleDailyChallengeCompletion(String challengeType) async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Increment user's EXP
+      await FirebaseFirestore.instance.collection('Users').doc(user.uid).update({
+        'exp': FieldValue.increment(200),
+      });
+
+      // Show dialog
+      _showCompletionMessage(
+        context,
+        "Daily Challenge Completed!",
+        "$challengeType challenge completed! You gained 200 EXP!",
+      );
+    } catch (e) {
+      print('Error updating daily challenge: $e');
+    }
+  }
+
+
+  void _updateDailyChallengeProgress() {
+    // Check each daily challenge
+    if (steps.value >= _totalSteps && !_completedDailyChallenges.contains('steps')) {
+      _completedDailyChallenges.add('steps');
+      _handleDailyChallengeCompletion('Steps');
+    }
+
+    if (activeTime.value >= _totalActiveTime && !_completedDailyChallenges.contains('activeTime')) {
+      _completedDailyChallenges.add('activeTime');
+      _handleDailyChallengeCompletion('Active Time');
+    }
+
+    if (caloriesBurnt.value >= _totalCaloriesBurnt && !_completedDailyChallenges.contains('caloriesBurnt')) {
+      _completedDailyChallenges.add('caloriesBurnt');
+      _handleDailyChallengeCompletion('Calories Burnt');
+    }
+
+    setState(() {}); // Update UI if needed
+  }
+
+  
   /// Update progress for Solo and Co-op Challenges
   void _updateChallengeProgress() {
     double currentKm = stepsToKm(steps.value.toInt());
@@ -494,8 +548,6 @@ class _ChallengePageState extends State<ChallengePage> {
       },
     );
   }
-
-
 
   @override
   Widget build(BuildContext context) {
