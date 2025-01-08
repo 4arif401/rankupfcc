@@ -57,6 +57,81 @@ class _FriendsPageState extends State<FriendsPage> {
     }
   }
 
+  void _showFriendDetails(Map<String, dynamic> friend) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.5,
+          minChildSize: 0.3,
+          maxChildSize: 0.5,
+          builder: (context, scrollController) {
+            // Exclude the first challenge in the list
+            List<dynamic> completedChallenges = friend['completedChallenge'] ?? [];
+            int totalChallengesCompleted =
+                completedChallenges.length > 1 ? completedChallenges.length - 1 : 0;
+
+            return Container(
+              padding: EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    spreadRadius: 1,
+                    blurRadius: 10,
+                    offset: Offset(0, -3),
+                  ),
+                ],
+              ),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  Center(
+                    child: Text(
+                      friend['username'] ?? 'Unknown',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.tealAccent,
+                      ),
+                    ),
+                  ),
+                  Divider(color: Colors.tealAccent.withOpacity(0.3)),
+                  SizedBox(height: 10),
+                  ListTile(
+                    leading: Icon(Icons.email, color: Colors.tealAccent),
+                    title: Text(
+                      friend['email'] ?? 'No Email',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.star, color: Colors.tealAccent),
+                    title: Text(
+                      'Level: ${friend['level'] ?? 0}',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.check_circle, color: Colors.tealAccent),
+                    title: Text(
+                      'Challenges Completed: $totalChallengesCompleted',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _acceptFriendRequest(String requesterId) async {
     try {
       String? userId = _auth.currentUser?.uid;
@@ -213,41 +288,45 @@ class _FriendsPageState extends State<FriendsPage> {
                           separatorBuilder: (context, index) => Divider(
                             color: Colors.tealAccent.withOpacity(0.5),
                             thickness: 1.0,
-                            height: 12, // Adjusted to control gap between items
+                            height: 12,
                           ),
                           itemBuilder: (context, index) {
                             Map<String, dynamic> friend = friendsData[index];
-                            return Container(
-                              padding: EdgeInsets.all(16.0),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(12.0),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.account_circle, color: Colors.tealAccent, size: 50),
-                                  SizedBox(width: 16.0),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        friend['username'] ?? 'Unknown',
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
+
+                            return GestureDetector(
+                              onTap: () => _showFriendDetails(friend),
+                              child: Container(
+                                padding: EdgeInsets.all(16.0),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(12.0),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.account_circle, color: Colors.tealAccent, size: 50),
+                                    SizedBox(width: 16.0),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          friend['username'] ?? 'Unknown',
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
                                         ),
-                                      ),
-                                      Text(
-                                        friend['email'] ?? 'No Email',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Colors.white70,
+                                        Text(
+                                          friend['email'] ?? 'No Email',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.white70,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
