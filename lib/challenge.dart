@@ -138,7 +138,7 @@ class _ChallengePageState extends State<ChallengePage> {
       }
     } else {
       if (acceptedCoopChallenge == null) {
-        final selectedFriendId = await _selectFriend();
+        final selectedFriendId = await _selectFriend(); // Ensure friend is selected
         if (selectedFriendId != null) {
           final selectedChallenge = await Navigator.push(
             context,
@@ -146,7 +146,16 @@ class _ChallengePageState extends State<ChallengePage> {
           );
 
           if (selectedChallenge != null) {
-            await _saveCoopChallengeProgress();
+            setState(() {
+              acceptedCoopChallenge = {
+                'id': selectedChallenge['id'],
+                'progress': 0.0,
+                'startStepsKm': stepsToKm(steps.value.toInt()), // Save current steps converted to km
+                'friendid': selectedFriendId,
+              };
+              coopChallengeDetails = selectedChallenge;
+            });
+            await _saveCoopChallengeProgress(); // Save progress to Firestore
           }
         }
       }
@@ -339,22 +348,30 @@ class _ChallengePageState extends State<ChallengePage> {
 
       String friendId = acceptedCoopChallenge!['friendid'];
 
-      // Update both user's and friend's progress
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
+      int userSteps = userDoc['steps'] ?? 0;
+
+      // Update the current user's Firestore document
       await FirebaseFirestore.instance.collection('Users').doc(user.uid).set({
-        'acceptedChallenge2': acceptedCoopChallenge,
+        'acceptedChallenge2': acceptedCoopChallenge, // Save the coop challenge
       }, SetOptions(merge: true));
 
+      // Update the friend's Firestore document
       await FirebaseFirestore.instance.collection('Users').doc(friendId).set({
         'acceptedChallenge2': {
           'id': acceptedCoopChallenge!['id'],
           'progress': acceptedCoopChallenge!['progress'],
-          'friendid': user.uid,
+          'friendid': user.uid, // Save reference to the current user
+          'startStepsKm': stepsToKm(userSteps), // Save current steps converted to km
         },
       }, SetOptions(merge: true));
+
+      print('Co-op challenge successfully saved.');
     } catch (e) {
       print('Error saving Co-op challenge progress: $e');
     }
   }
+
 
   Future<void> _fetchAcceptedCoopChallenge() async {
     User? user = FirebaseAuth.instance.currentUser;

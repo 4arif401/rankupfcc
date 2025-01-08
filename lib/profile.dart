@@ -48,12 +48,16 @@ class _ProfilePageState extends State<ProfilePage> {
             username = userDoc['username'] ?? "No username"; // Fetch 'username' field
             level = userDoc['level'] ?? 1; // Fetch 'level' field
             exp = userDoc['exp'] ?? 0; // Fetch 'exp' field
-            completedChallengeIds = List<String>.from(userDoc['completedChallenge'] ?? []);
+            
+            // Fetch 'completedChallenge' starting from index 1
+            List<String> allChallenges = List<String>.from(userDoc['completedChallenge'] ?? []);
+            completedChallengeIds = allChallenges.length > 1 ? allChallenges.sublist(1) : []; // Skip the first element
           });
 
           // Fetch details for completed challenges
           await _fetchCompletedChallengesDetails();
-        } else {
+        }
+        else {
           setState(() {
             username = "No username found";
           });
@@ -344,7 +348,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 style: TextStyle(fontSize: 20, color: Colors.white70),
               ),
               subtitle: Text(
-                '${completedChallengeIds.length - 1} completed',
+                '${completedChallengeIds.length} completed',
                 style: TextStyle(fontSize: 16, color: Colors.white54),
               ),
             ),
