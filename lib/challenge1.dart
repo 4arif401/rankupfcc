@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:rankupfcc/variable.dart';
 
 class Challenge1Page extends StatefulWidget {
   @override
@@ -19,34 +20,43 @@ class _Challenge1PageState extends State<Challenge1Page> {
   // Fetch completed challenges for the current user
   Future<void> _fetchCompletedChallenges() async {
     try {
-      String? userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) return;
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('Users').doc(loggedInUserId).get();
 
-      // Get the completedChallenge array from Firestore
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('Users').doc(userId).get();
       if (userDoc.exists) {
-        List<dynamic> completed = userDoc['completedChallenge'] ?? [];
+        List<dynamic>? completed = userDoc['completedChallenge']; // Get the array
         setState(() {
-          completedChallenges = completed.map((e) => e.toString()).toList();
+          completedChallenges = completed?.map((e) => e.toString()).toList() ?? []; // Default to an empty list
+        });
+      } else {
+        setState(() {
+          completedChallenges = []; // User document doesn't exist, initialize as empty
         });
       }
     } catch (e) {
       print('Error fetching completed challenges: $e');
+      setState(() {
+        completedChallenges = []; // On error, treat it as no completed challenges
+      });
     }
   }
 
-  // Fetch all challenges and filter out completed ones
   Future<List<Map<String, dynamic>>> _fetchChallenges() async {
-    QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('Challenges').get();
+    try {
+      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('Challenges').get();
 
-    return snapshot.docs
-        .where((doc) => !completedChallenges.contains(doc.id)) // Filter out completed challenges
-        .map((doc) => {
-              ...doc.data() as Map<String, dynamic>,
-              'id': doc.id, // Include the document ID
-            })
-        .toList();
+      return snapshot.docs
+          .where((doc) => !completedChallenges.contains(doc.id)) // Filter out completed challenges
+          .map((doc) => {
+                ...doc.data() as Map<String, dynamic>,
+                'id': doc.id, // Include the document ID
+              })
+          .toList();
+    } catch (e) {
+      print('Error fetching challenges: $e');
+      return []; // Return an empty list on error
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {

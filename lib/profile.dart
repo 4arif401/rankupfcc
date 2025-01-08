@@ -30,7 +30,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadUserData() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
-
+    
       if (user != null) {
         // Fetch user email from Auth
         setState(() {
@@ -344,7 +344,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 style: TextStyle(fontSize: 20, color: Colors.white70),
               ),
               subtitle: Text(
-                '${completedChallengeIds.length} completed',
+                '${completedChallengeIds.length - 1} completed',
                 style: TextStyle(fontSize: 16, color: Colors.white54),
               ),
             ),

@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'step_tracker.dart';
 import 'challenge1.dart';
 import 'location_tracker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ChallengePage extends StatefulWidget {
   @override
@@ -22,6 +23,7 @@ class _ChallengePageState extends State<ChallengePage> {
   final double _totalActiveTime = 90;
   final double _totalCaloriesBurnt = 400;
   Set<String> _completedDailyChallenges = {};
+
 
   Duration _timeLeft = Duration();
 
@@ -393,25 +395,41 @@ class _ChallengePageState extends State<ChallengePage> {
   }
 
 
-  void _updateDailyChallengeProgress() {
-    // Check each daily challenge
-    if (steps.value >= _totalSteps && !_completedDailyChallenges.contains('steps')) {
-      _completedDailyChallenges.add('steps');
+  void _updateDailyChallengeProgress() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    DateTime now = DateTime.now();
+    String today = "${now.year}-${now.month}-${now.day}";
+
+    // Check if 'steps' daily challenge is completed today
+    String stepsKey = 'dailyChallengeSteps';
+    String? stepsCompletionDate = prefs.getString(stepsKey);
+
+    if (steps.value >= _totalSteps && stepsCompletionDate != today) {
+      prefs.setString(stepsKey, today); // Save today's date
       _handleDailyChallengeCompletion('Steps');
     }
 
-    if (activeTime.value >= _totalActiveTime && !_completedDailyChallenges.contains('activeTime')) {
-      _completedDailyChallenges.add('activeTime');
+    // Check if 'activeTime' daily challenge is completed today
+    String activeTimeKey = 'dailyChallengeActiveTime';
+    String? activeTimeCompletionDate = prefs.getString(activeTimeKey);
+
+    if (activeTime.value >= _totalActiveTime && activeTimeCompletionDate != today) {
+      prefs.setString(activeTimeKey, today); // Save today's date
       _handleDailyChallengeCompletion('Active Time');
     }
 
-    if (caloriesBurnt.value >= _totalCaloriesBurnt && !_completedDailyChallenges.contains('caloriesBurnt')) {
-      _completedDailyChallenges.add('caloriesBurnt');
+    // Check if 'caloriesBurnt' daily challenge is completed today
+    String caloriesBurntKey = 'dailyChallengeCaloriesBurnt';
+    String? caloriesBurntCompletionDate = prefs.getString(caloriesBurntKey);
+
+    if (caloriesBurnt.value >= _totalCaloriesBurnt && caloriesBurntCompletionDate != today) {
+      prefs.setString(caloriesBurntKey, today); // Save today's date
       _handleDailyChallengeCompletion('Calories Burnt');
     }
 
     setState(() {}); // Update UI if needed
   }
+
 
   
   /// Update progress for Solo and Co-op Challenges
