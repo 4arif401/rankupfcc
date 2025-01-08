@@ -7,6 +7,7 @@ ValueNotifier<double> steps = ValueNotifier<double>(0.0);
 ValueNotifier<double> activeTime = ValueNotifier<double>(0.0);
 ValueNotifier<double> caloriesBurnt = ValueNotifier<double>(0.0);
 ValueNotifier<double> distance = ValueNotifier<double>(0.0);
+String? loggedInUserId;
 
 // Function to reset all variables
 Future<void> resetVariables() async {

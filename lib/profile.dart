@@ -29,7 +29,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadUserData() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      User? user = FirebaseAuth.instance.currentUser;
 
       if (user != null) {
         // Fetch user email from Auth
@@ -59,13 +59,14 @@ class _ProfilePageState extends State<ProfilePage> {
           });
         }
       }
-    } catch (e) {
-      print("Error loading user data: $e");
-      setState(() {
-        username = "Error loading username";
-        email = "Error loading email";
-      });
-    }
+    } catch (e, stackTrace) {
+        print("Error loading user data: $e");
+        print("Stack trace: $stackTrace");
+        setState(() {
+          username = "Error loading username";
+          email = "Error loading email";
+        });
+      }
   }
 
   Future<void> _fetchCompletedChallengesDetails() async {
@@ -194,13 +195,44 @@ class _ProfilePageState extends State<ProfilePage> {
 
 
   void _logout() async {
-    await FirebaseAuth.instance.signOut(); // Log out from Firebase
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => LoginPage()),
-      (route) => false,
-    );
+    try {
+      // Clear local user state (if applicable)
+      setState(() {
+        username = '';
+        email = '';
+        level = 1;
+        exp = 0;
+        completedChallengeIds.clear();
+        challengeDetails.clear();
+      });
+
+      // Log out from Firebase
+      await FirebaseAuth.instance.signOut();
+
+      // Navigate to login page
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => LoginPage()),
+        (route) => false,
+      );
+    } catch (e) {
+      print("Error during sign-out: $e");
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("Logout Failed"),
+          content: Text("Please try again."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text("OK"),
+            ),
+          ],
+        ),
+      );
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {

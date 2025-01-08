@@ -100,16 +100,41 @@ class LoginPage extends StatelessWidget {
   final TextEditingController _passwordController = TextEditingController();
 
   Future<void> _login(BuildContext context) async {
+    // Show loading screen
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent dismissing the dialog
+      builder: (context) {
+        return Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.tealAccent),
+          ),
+        );
+      },
+    );
+
     try {
+      // Simulate database authentication
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+
+      // Close the loading dialog
+      Navigator.pop(context);
+
+      
+
+      // Navigate to ChallengePage
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => ChallengePage()),
       );
     } catch (e) {
+      // Close the loading dialog
+      Navigator.pop(context);
+
+      // Show error message
       showDialog(
         context: context,
         builder: (context) => AlertDialog(

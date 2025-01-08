@@ -86,9 +86,12 @@ Future<void> saveFitnessData() async {
 Future<void> fetchFitnessData() async {
   try {
     User? user = FirebaseAuth.instance.currentUser;
+    
     if (user == null) return;
 
     DocumentSnapshot snapshot = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
+
+    loggedInUserId = user.uid;
 
     if (snapshot.exists) {
       Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;

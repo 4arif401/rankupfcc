@@ -96,7 +96,7 @@ class _ChallengePageState extends State<ChallengePage> {
   @override
   void dispose() {
     _countdownTimer?.cancel(); // Cancel the timer when the widget is disposed
-    steps.removeListener(_updateChallengeProgress);
+    //steps.removeListener(_updateChallengeProgress);
     super.dispose();
   }
 
