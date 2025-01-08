@@ -7,8 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'step_tracker.dart';
 import 'challenge1.dart';
-import 'location_tracker.dart';
+//import 'location_tracker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'game_screen.dart';
 
 class ChallengePage extends StatefulWidget {
   @override
@@ -33,7 +34,7 @@ class _ChallengePageState extends State<ChallengePage> {
   Map<String, dynamic>? coopChallengeDetails;
 
 
-  final LocationTracker locationTracker = LocationTracker(); // Instantiate LocationTracker
+  //final LocationTracker locationTracker = LocationTracker(); // Instantiate LocationTracker
   double initialDistance = 0.0; // Tracks the starting distance when a challenge is accepted
 
   @override
@@ -112,6 +113,38 @@ class _ChallengePageState extends State<ChallengePage> {
     return (current / total).clamp(0.0, 1.0); // Ensure progress doesn't exceed 1.0
   }
 
+  Future<int?> _showStepGoalDialog() async {
+    int? stepGoal;
+    TextEditingController controller = TextEditingController();
+
+    return showDialog<int>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Enter Step Goal'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(hintText: 'Enter step goal'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), // Cancel
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                stepGoal = int.tryParse(controller.text);
+                Navigator.pop(context, stepGoal);
+              },
+              child: Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _handleChallengeTap({
     required bool isSolo,
     Map<String, dynamic>? challenge,
@@ -137,30 +170,48 @@ class _ChallengePageState extends State<ChallengePage> {
         }
       }
     } else {
+      // Handle Co-op Challenge
       if (acceptedCoopChallenge == null) {
-        final selectedFriendId = await _selectFriend(); // Ensure friend is selected
+        final selectedFriendId = await _selectFriend(); // Show modal to select friend
         if (selectedFriendId != null) {
-          final selectedChallenge = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => Challenge1Page()),
-          );
+          // Show dialog to enter step goal
+          int? stepGoal = await _showStepGoalDialog();
+          if (stepGoal != null) {
+            try {
+              // Save vsInvite for the current user
+              User? user = FirebaseAuth.instance.currentUser;
+              if (user == null) return;
 
-          if (selectedChallenge != null) {
-            setState(() {
-              acceptedCoopChallenge = {
-                'id': selectedChallenge['id'],
-                'progress': 0.0,
-                'startStepsKm': stepsToKm(steps.value.toInt()), // Save current steps converted to km
-                'friendid': selectedFriendId,
-              };
-              coopChallengeDetails = selectedChallenge;
-            });
-            await _saveCoopChallengeProgress(); // Save progress to Firestore
+              await FirebaseFirestore.instance.collection('Users').doc(user.uid).update({
+                'vsInvite': {
+                  'friendId': selectedFriendId,
+                  'stepGoal': stepGoal,
+                },
+              });
+
+              // Save vsRequest for the selected friend
+              await FirebaseFirestore.instance.collection('Users').doc(selectedFriendId).update({
+                'vsRequest': {
+                  'userId': user.uid,
+                  'stepGoal': stepGoal,
+                },
+              });
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Challenge invitation sent to your friend!')),
+              );
+            } catch (e) {
+              print('Error sending challenge invitation: $e');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to send challenge invitation.')),
+              );
+            }
           }
         }
       }
     }
   }
+
 
   Widget _buildChallengeCard(
     String title,
@@ -444,7 +495,7 @@ class _ChallengePageState extends State<ChallengePage> {
       _handleDailyChallengeCompletion('Calories Burnt');
     }
 
-    setState(() {}); // Update UI if needed
+    //setState(() {}); // Update UI if needed
   }
 
 
@@ -466,7 +517,7 @@ class _ChallengePageState extends State<ChallengePage> {
     }
 
     // Handle Co-op Challenge
-    if (acceptedCoopChallenge != null) {
+    /*if (acceptedCoopChallenge != null) {
       double startKm = acceptedCoopChallenge!['startStepsKm'] ?? 0.0;
       acceptedCoopChallenge!['progress'] = (currentKm - startKm).clamp(0.0, double.infinity);
 
@@ -475,9 +526,9 @@ class _ChallengePageState extends State<ChallengePage> {
       } else {
         _saveCoopChallengeProgress();
       }
-    }
+    }*/
 
-    setState(() {}); // Trigger UI update
+    //setState(() {}); // Trigger UI update
   }
 
   Future<void> _completeSoloChallenge() async {
@@ -667,14 +718,7 @@ class _ChallengePageState extends State<ChallengePage> {
             ),
             SizedBox(height: 20),
             Text('Co-op Challenge', style: _headerStyle),
-            _buildChallengeCard(
-              'Co-op Challenge',
-              acceptedCoopChallenge,
-              coopChallengeDetails,
-              Colors.blueGrey.shade500,
-              Colors.blueGrey.shade800,
-              false, // isSolo
-            ),
+            _buildCoopChallengeCard(),
             /*// Accepted Challenge Title and Horizontal Line
             Text(
               'Solo Challenge',
@@ -931,6 +975,83 @@ class _ChallengePageState extends State<ChallengePage> {
     );
   }
 
+  Widget _buildGreyContainer1() {
+    return GestureDetector(
+      onTap: () => _handleChallengeTap(
+        isSolo: false, // This indicates that it's a co-op challenge
+        challenge: null,
+        details: null,
+      ),
+      child: Container(
+        height: 100.0,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade800,
+          borderRadius: BorderRadius.circular(15.0),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.add,
+            size: 50.0,
+            color: Colors.tealAccent,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoopChallengeCard() {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId == null) return _buildGreyContainer();
+
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('Users').doc(userId).get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return _buildGreyContainer();
+
+        final data = snapshot.data!.data() as Map<String, dynamic>?;
+
+        if (data == null) return _buildGreyContainer();
+
+        // Check for vsInvite
+        if (data.containsKey('vsInvite')) {
+          final vsInvite = data['vsInvite'];
+          return _buildPendingContainer(
+            friendId: vsInvite['friendId'],
+            stepGoal: vsInvite['stepGoal'],
+          );
+        }
+
+        // Check for vsRequest
+        if (data.containsKey('vsRequest')) {
+          final vsRequest = data['vsRequest'];
+          return _buildIncomingContainer(
+            fromUserId: vsRequest['userId'],
+            stepGoal: vsRequest['stepGoal'],
+          );
+        }
+
+        // Check for vsOngoing
+        if (data.containsKey('vsOngoing')) {
+          final vsOngoing = data['vsOngoing'];
+          return _buildOngoingContainer(
+            friendId: vsOngoing['friendId'],
+            stepGoal: vsOngoing['stepGoal'],
+            stepsProgress: vsOngoing['stepsProgress'],
+          );
+        }
+
+        return _buildGreyContainer1();
+
+        // Default: Grey container
+        /*return GestureDetector(
+          onTap: () => _selectFriend(),
+          child: _buildGreyContainer(),
+        );*/
+        
+      },
+    );
+  }
   
   /// Build list item with ValueNotifier support
   Widget _buildListItem(String title, ValueNotifier<double> valueNotifier, double maxValue, double screenWidth) {
@@ -1040,7 +1161,216 @@ class _ChallengePageState extends State<ChallengePage> {
     );
   } */
 
- 
+  BoxDecoration _containerDecoration(Color color) {
+    return BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.2),
+          blurRadius: 8,
+          offset: Offset(0, 4),
+        ),
+      ],
+    );
+  }
+
+  TextStyle get _titleStyle {
+    return TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      color: Colors.white,
+    );
+  }
+
+  TextStyle get _subtitleStyle {
+    return TextStyle(
+      fontSize: 16,
+      color: Colors.white70,
+    );
+  }
+
+  Widget _buildPendingContainer({required String friendId, required int stepGoal}) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('Users').doc(friendId).get(),
+      builder: (context, snapshot) {
+        final friendData = snapshot.data?.data() as Map<String, dynamic>?;
+
+        final friendUsername = friendData?['username'] ?? 'Unknown';
+
+        return Container(
+          padding: EdgeInsets.all(16),
+          decoration: _containerDecoration(Colors.orange),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Request Pending', style: _titleStyle),
+              Text('Invited Friend: $friendUsername', style: _subtitleStyle),
+              Text('Goal: $stepGoal steps', style: _subtitleStyle),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildIncomingContainer({required String fromUserId, required int stepGoal}) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('Users').doc(fromUserId).get(),
+      builder: (context, snapshot) {
+        final friendData = snapshot.data?.data() as Map<String, dynamic>?;
+
+        final friendUsername = friendData?['username'] ?? 'Unknown';
+
+        return Container(
+          padding: EdgeInsets.all(16),
+          decoration: _containerDecoration(Colors.redAccent),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Incoming Challenge', style: _titleStyle),
+              Text('From: $friendUsername', style: _subtitleStyle),
+              Text('Goal: $stepGoal steps', style: _subtitleStyle),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => _acceptChallenge(fromUserId, stepGoal),
+                    child: Text('Accept'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => _declineChallenge(fromUserId),
+                    child: Text('Decline'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _navigateToGameScreen(BuildContext context) async {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId == null) {
+      print("Error: User not logged in.");
+      return;
+    }
+
+    try {
+      // Fetch user document from Firestore
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(userId)
+          .get();
+
+      final userData = userDoc.data() as Map<String, dynamic>?;
+
+      if (userData != null && userData.containsKey('vsOngoing')) {
+        final vsOngoing = userData['vsOngoing'];
+
+        // Fetch friend's stepsProgress
+        final friendDoc = await FirebaseFirestore.instance
+            .collection('Users')
+            .doc(vsOngoing['friendId'])
+            .get();
+
+        final friendData = friendDoc.data() as Map<String, dynamic>?;
+
+        if (friendData != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => GameScreen(
+                friendId: vsOngoing['friendId'],
+                stepGoal: vsOngoing['stepGoal'],
+                userStepsProgress: vsOngoing['stepsProgress'],
+                friendStepsProgress: friendData['stepsProgress'] ?? 0,
+              ),
+            ),
+          );
+        } else {
+          print("Error: Friend data not found.");
+        }
+      } else {
+        print("Error: No ongoing challenge found.");
+      }
+    } catch (e) {
+      print("Error navigating to game screen: $e");
+    }
+  }
+
+
+  Widget _buildOngoingContainer({
+    required String friendId,
+    required int stepGoal,
+    required int stepsProgress,
+  }) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('Users').doc(friendId).get(),
+      builder: (context, snapshot) {
+        final friendData = snapshot.data?.data() as Map<String, dynamic>?;
+
+        final friendUsername = friendData?['username'] ?? 'Unknown';
+
+        return GestureDetector(
+          onTap: () => _navigateToGameScreen(context),
+          child: Container(
+            padding: EdgeInsets.all(16),
+            decoration: _containerDecoration(Colors.green),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('VS $friendUsername', style: _titleStyle),
+                Text('Goal: $stepGoal steps', style: _subtitleStyle),
+                Text('Progress: $stepsProgress steps', style: _subtitleStyle),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _acceptChallenge(String friendId, int stepGoal) async {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId == null) return;
+
+    // Create vsOngoing for both users
+    final Map<String, dynamic> vsOngoing = {
+      'friendId': friendId,
+      'stepGoal': stepGoal,
+      'stepsProgress': 0,
+    };
+
+    await FirebaseFirestore.instance.collection('Users').doc(userId).update({
+      'vsOngoing': vsOngoing,
+      'vsRequest': FieldValue.delete(),
+    });
+
+    await FirebaseFirestore.instance.collection('Users').doc(friendId).update({
+      'vsOngoing': {
+        'friendId': userId,
+        'stepGoal': stepGoal,
+        'stepsProgress': 0,
+      },
+      'vsInvite': FieldValue.delete(),
+    });
+  }
+
+  void _declineChallenge(String fromUserId) async {
+    final String? userId = FirebaseAuth.instance.currentUser?.uid;
+
+    if (userId == null) return;
+
+    // Remove vsRequest from the current user
+    await FirebaseFirestore.instance.collection('Users').doc(userId).update({
+      'vsRequest': FieldValue.delete(),
+    });
+  }
 
   Widget _buildGreyContainer() {
     return Container(

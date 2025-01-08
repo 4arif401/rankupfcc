@@ -78,20 +78,6 @@ class CustomBottomNavigationBar extends StatelessWidget {
           unselectedItemColor: Colors.white70,
           onTap: (index) => _onItemTapped(context, index),
         ),
-        FloatingActionButton(
-          heroTag: "startGame",
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => GameScreen(
-                  friendId: "G1m7sxFkxMeXCmaRgKCTBXba7Jx1"),
-              ),
-            );
-          },
-          backgroundColor: Colors.tealAccent,
-          child: Icon(Icons.play_arrow, color: Colors.black),
-        ),
       ],
     );
   }

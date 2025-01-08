@@ -5,7 +5,7 @@ import 'challenge.dart'; // Import ChallengePage
 import 'register.dart'; // Import RegisterPage
 import 'variable.dart'; // Import global variables for steps, activeTime, and caloriesBurnt
 import 'step_tracker.dart'; // Import StepTracker for step tracking
-import 'location_tracker.dart'; // Import LocationTracker for distance tracking
+//import 'location_tracker.dart'; // Import LocationTracker for distance tracking
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +54,7 @@ class AuthenticationWrapper extends StatefulWidget {
 }
 
 class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
-  final LocationTracker locationTracker = LocationTracker();
+  //final LocationTracker locationTracker = LocationTracker();
   double currentDistance = 0.0; // Distance in kilometers
 
   @override
@@ -64,16 +64,16 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
     checkAndResetData(); // Check for reset at midnight
 
     // Initialize location tracking
-    locationTracker.initLocationTracker().then((_) {
-      locationTracker.startTracking();
-    }).catchError((e) {
-      print('Error initializing location tracker: $e');
-    });
+    //locationTracker.initLocationTracker().then((_) {
+    //  locationTracker.startTracking();
+    //}).catchError((e) {
+    //  print('Error initializing location tracker: $e');
+    //});
   }
 
   @override
   void dispose() {
-    locationTracker.stopTracking(); // Stop location tracking
+    //locationTracker.stopTracking(); // Stop location tracking
     super.dispose();
   }
 
@@ -85,7 +85,7 @@ class _AuthenticationWrapperState extends State<AuthenticationWrapper> {
       return StreamBuilder(
         stream: Stream.periodic(Duration(seconds: 1)), // Periodic updates
         builder: (context, snapshot) {
-          currentDistance = locationTracker.totalDistance / 1000; // Convert meters to km
+          //currentDistance = locationTracker.totalDistance / 1000; // Convert meters to km
           return ChallengePage();
         },
       );

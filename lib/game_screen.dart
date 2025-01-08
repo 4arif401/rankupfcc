@@ -3,9 +3,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class GameScreen extends StatefulWidget {
-  final String friendId; // Pass friend's user ID to this page
+  final String friendId;
+  final int stepGoal;
+  final int userStepsProgress;
+  final int friendStepsProgress;
 
-  const GameScreen({Key? key, required this.friendId}) : super(key: key);
+  const GameScreen({
+    Key? key,
+    required this.friendId,
+    required this.stepGoal,
+    required this.userStepsProgress,
+    required this.friendStepsProgress,
+  }) : super(key: key);
 
   @override
   _GameScreenState createState() => _GameScreenState();
@@ -16,8 +25,9 @@ class _GameScreenState extends State<GameScreen>
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  double mySteps = 0;
-  double friendSteps = 0;
+  double myStepsProgress = 0;
+  double friendStepsProgress = 0;
+  double stepGoal = 0;
   String myUsername = "You";
   String friendUsername = "Friend";
 
@@ -25,15 +35,14 @@ class _GameScreenState extends State<GameScreen>
   late Animation<double> _myPositionAnimation;
   late Animation<double> _friendPositionAnimation;
 
-  final double goalSteps = 25000; // Set a goal point for the race
 
   @override
   void initState() {
     super.initState();
 
     // Initialize default step values
-    mySteps = 0;
-    friendSteps = 0;
+    myStepsProgress = 0;
+    friendStepsProgress = 0;
 
     // Initialize animation controller
     _animationController = AnimationController(
@@ -52,9 +61,53 @@ class _GameScreenState extends State<GameScreen>
       end: 0.5,
     ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeInOut));
 
+    // Fetch initial data
+    _fetchStepProgress();
+
     // Listen for real-time updates
-    _listenForStepUpdates();
+    //_listenForStepUpdates();
   }
+
+  void _fetchStepProgress() async {
+    final String? userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    // Fetch user's `vsOngoing` data
+    DocumentSnapshot userDoc =
+        await _firestore.collection('Users').doc(userId).get();
+    if (userDoc.exists) {
+      final Map<String, dynamic>? userData =
+          userDoc.data() as Map<String, dynamic>?; // Explicitly cast
+      final userOngoing = userData?['vsOngoing'] as Map<String, dynamic>?; // Cast as Map
+      if (userOngoing != null) {
+        setState(() {
+          myStepsProgress = (userOngoing['stepsProgress'] ?? 0).toDouble();
+          stepGoal = (userOngoing['stepGoal'] ?? 1).toDouble(); // Avoid division by zero
+          myUsername = userData?['username'] ?? "You";
+        });
+      }
+    }
+
+    // Fetch friend's `vsOngoing` data
+    DocumentSnapshot friendDoc =
+        await _firestore.collection('Users').doc(widget.friendId).get();
+    if (friendDoc.exists) {
+      final Map<String, dynamic>? friendData =
+          friendDoc.data() as Map<String, dynamic>?; // Explicitly cast
+      final friendOngoing =
+          friendData?['vsOngoing'] as Map<String, dynamic>?; // Cast as Map
+      if (friendOngoing != null) {
+        setState(() {
+          friendStepsProgress =
+              (friendOngoing['stepsProgress'] ?? 0).toDouble();
+          friendUsername = friendData?['username'] ?? "Friend";
+        });
+      }
+    }
+
+    _updatePositions();
+  }
+
 
   void _listenForStepUpdates() {
     final String? userId = _auth.currentUser?.uid;
@@ -64,7 +117,7 @@ class _GameScreenState extends State<GameScreen>
     _firestore.collection('Users').doc(userId).snapshots().listen((snapshot) {
       if (snapshot.exists) {
         setState(() {
-          mySteps = (snapshot.data()?['steps'] ?? 0).toDouble();
+          myStepsProgress = (snapshot.data()?['steps'] ?? 0).toDouble();
           myUsername = snapshot.data()?['username'] ?? "You";
           _updatePositions();
         });
@@ -74,7 +127,7 @@ class _GameScreenState extends State<GameScreen>
     _firestore.collection('Users').doc(widget.friendId).snapshots().listen((snapshot) {
       if (snapshot.exists) {
         setState(() {
-          friendSteps = (snapshot.data()?['steps'] ?? 0).toDouble();
+          friendStepsProgress = (snapshot.data()?['steps'] ?? 0).toDouble();
           friendUsername = snapshot.data()?['username'] ?? "Friend";
           _updatePositions();
         });
@@ -86,12 +139,12 @@ class _GameScreenState extends State<GameScreen>
     // Animate the positions based on progress towards the goal
     _myPositionAnimation = Tween<double>(
       begin: _myPositionAnimation.value,
-      end: (mySteps / goalSteps).clamp(0.0, 1.0),
+      end: (myStepsProgress / stepGoal).clamp(0.0, 1.0),
     ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeInOut));
 
     _friendPositionAnimation = Tween<double>(
       begin: _friendPositionAnimation.value,
-      end: (friendSteps / goalSteps).clamp(0.0, 1.0),
+      end: (friendStepsProgress / stepGoal).clamp(0.0, 1.0),
     ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeInOut));
 
     _animationController.forward(from: 0);
@@ -105,7 +158,7 @@ class _GameScreenState extends State<GameScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Calculate the dynamic height of the page based on goalSteps
+    // Calculate the dynamic height of the page based on stepGoal
     double dynamicHeight = MediaQuery.of(context).size.height * 2; // Extend height for scrolling
 
     return Scaffold(
@@ -130,7 +183,7 @@ class _GameScreenState extends State<GameScreen>
                       Positioned(
                         top: 50, // Always at the top with some padding
                         left: MediaQuery.of(context).size.width * 0.5 - 50,
-                        child: GoalPoint(goalSteps: goalSteps),
+                        child: GoalPoint(goalSteps: stepGoal),
                       ),
 
                       // Friend's character
@@ -141,7 +194,7 @@ class _GameScreenState extends State<GameScreen>
                         child: CharacterContainer(
                           color: Colors.redAccent,
                           label: friendUsername,
-                          steps: friendSteps,
+                          steps: friendStepsProgress,
                         ),
                       ),
 
@@ -153,7 +206,7 @@ class _GameScreenState extends State<GameScreen>
                         child: CharacterContainer(
                           color: Colors.blueAccent,
                           label: myUsername,
-                          steps: mySteps,
+                          steps: myStepsProgress,
                         ),
                       ),
                     ],
@@ -169,8 +222,8 @@ class _GameScreenState extends State<GameScreen>
             bottom: 0,
             right: 20,
             child: VerticalProgressBar(
-              myProgress: mySteps / goalSteps,
-              friendProgress: friendSteps / goalSteps,
+              myProgress: myStepsProgress / stepGoal,
+              friendProgress: friendStepsProgress / stepGoal,
               myUsername: myUsername,
               friendUsername: friendUsername,
             ),
@@ -179,8 +232,6 @@ class _GameScreenState extends State<GameScreen>
       ),
     );
   }
-
-
 }
 
 class VerticalProgressBar extends StatelessWidget {
