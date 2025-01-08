@@ -3,6 +3,7 @@ import 'challenge.dart'; // Import your ChallengePage
 import 'profile.dart'; // Import your ProfilePage
 import 'friends.dart'; // Import your FriendsPage
 import 'leaderboard.dart'; // Import your LeaderboardPage
+import 'game_screen.dart';
 
 class CustomBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
@@ -50,30 +51,49 @@ class CustomBottomNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      backgroundColor: Colors.black87,
-      items: const <BottomNavigationBarItem>[
-        BottomNavigationBarItem(
-          icon: Icon(Icons.fitness_center, color: Colors.tealAccent),
-          label: 'Challenge',
+    return Stack(
+      children: [
+        BottomNavigationBar(
+          backgroundColor: Colors.black87,
+          items: const <BottomNavigationBarItem>[
+            BottomNavigationBarItem(
+              icon: Icon(Icons.fitness_center, color: Colors.tealAccent),
+              label: 'Challenge',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.leaderboard, color: Colors.tealAccent),
+              label: 'Leaderboard',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.group, color: Colors.tealAccent),
+              label: 'Friends',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person, color: Colors.tealAccent),
+              label: 'Profile',
+            ),
+          ],
+          currentIndex: currentIndex,
+          selectedItemColor: Colors.tealAccent,
+          unselectedItemColor: Colors.white70,
+          onTap: (index) => _onItemTapped(context, index),
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.leaderboard, color: Colors.tealAccent),
-          label: 'Leaderboard',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.group, color: Colors.tealAccent),
-          label: 'Friends',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person, color: Colors.tealAccent),
-          label: 'Profile',
+        FloatingActionButton(
+          heroTag: "startGame",
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => GameScreen(
+                  friendId: "G1m7sxFkxMeXCmaRgKCTBXba7Jx1"),
+              ),
+            );
+          },
+          backgroundColor: Colors.tealAccent,
+          child: Icon(Icons.play_arrow, color: Colors.black),
         ),
       ],
-      currentIndex: currentIndex,
-      selectedItemColor: Colors.tealAccent,
-      unselectedItemColor: Colors.white70,
-      onTap: (index) => _onItemTapped(context, index),
     );
   }
+
 }
