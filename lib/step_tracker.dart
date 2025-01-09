@@ -12,20 +12,44 @@ class StepTracker {
 
   // Initialize the step tracker
   void initStepTracker() async {
-    initialDeviceStepCount = 0.0;
-    await fetchFitnessData(); // Fetch the initial data from Firebase
-    _stepCountStream = Pedometer.stepCountStream;
-    _stepCountStream?.listen(_onStepCount).onError(_onStepCountError);
+    try {
+      await fetchFitnessData(); // Fetch the initial data from Firebase
+      _stepCountStream = Pedometer.stepCountStream;
+
+      // Align `initialDeviceStepCount` with current pedometer step count
+      StepCount? currentStepCount = await _getCurrentPedometerSteps();
+      if (currentStepCount != null) {
+        if (initialDeviceStepCount == 0.0) {
+          // Align only if `initialDeviceStepCount` is uninitialized
+          initialDeviceStepCount = currentStepCount.steps.toDouble();
+        }
+      }
+
+      _stepCountStream?.listen(_onStepCount).onError(_onStepCountError);
+    } catch (e) {
+      print("Error initializing step tracker: $e");
+    }
   }
+
+  // Helper method to fetch the current pedometer steps
+  Future<StepCount?> _getCurrentPedometerSteps() async {
+    try {
+      return await Pedometer.stepCountStream.first;
+    } catch (e) {
+      print('Error fetching current pedometer steps: $e');
+      return null;
+    }
+  }
+
 
   // Handle step count updates
   void _onStepCount(StepCount event) async {
     try {
       double currentPedometerSteps = event.steps.toDouble();
 
-      // First-time setup after app starts or reset
+      // If uninitialized, align with current device step count
       if (initialDeviceStepCount == 0.0) {
-        initialDeviceStepCount = currentPedometerSteps; // Align with device pedometer count
+        initialDeviceStepCount = currentPedometerSteps;
         return;
       }
 
@@ -38,23 +62,44 @@ class StepTracker {
         return;
       }
 
-      // Adjust steps to align with last saved steps in Firestore
-      steps.value = lastSavedSteps + newSteps;
+      // Update stepsProgress in Firestore if `vsOngoing` exists
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
+        if (userDoc.exists) {
+          final Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
+          final Map<String, dynamic>? userOngoing = userData?['vsOngoing'] as Map<String, dynamic>?;
 
-      // Update active time and calories burnt
+          if (userOngoing != null) {
+            // Get the current `stepsProgress` value from Firestore
+            int currentStepsProgress = userOngoing['stepsProgress'] ?? 0;
+
+            // Calculate new `stepsProgress`
+            int updatedStepsProgress = currentStepsProgress + newSteps.toInt();
+
+            // Update Firestore with the new `stepsProgress`
+            await FirebaseFirestore.instance.collection('Users').doc(user.uid).update({
+              'vsOngoing.stepsProgress': updatedStepsProgress,
+            });
+          }
+        }
+      }
+
+      // Update local variables and reset device step count
+      steps.value = lastSavedSteps + newSteps;
       activeTime.value = steps.value / 100; // Example: 100 steps = 1 minute
       caloriesBurnt.value = steps.value * 0.04; // Example: 0.04 calories per step
 
-      // Save the new values to Firebase periodically
       if (steps.value - lastSavedSteps >= 50) { // Save every 50 steps
         saveFitnessData();
-        lastSavedSteps = steps.value; // Update last saved steps
+        lastSavedSteps = steps.value;
         initialDeviceStepCount = currentPedometerSteps; // Reset initialDeviceStepCount
       }
     } catch (e) {
       print('Error updating step count: $e');
     }
   }
+
 
   // Handle errors in step tracking
   void _onStepCountError(dynamic error) {
@@ -82,11 +127,9 @@ Future<void> saveFitnessData() async {
   }
 }
 
-// Fetch fitness data from Firebase and initialize variables
 Future<void> fetchFitnessData() async {
   try {
     User? user = FirebaseAuth.instance.currentUser;
-    
     if (user == null) return;
 
     DocumentSnapshot snapshot = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
@@ -99,8 +142,11 @@ Future<void> fetchFitnessData() async {
       // Fetch the last saved steps from Firestore
       lastSavedSteps = (data['steps'] ?? 0).toDouble();
 
-      // Set initialDeviceStepCount to align with the pedometer
-      initialDeviceStepCount = (data['initialDeviceStepCount'] ?? 0).toDouble();
+      // Set initialDeviceStepCount to align with Firebase only if it differs
+      double savedDeviceStepCount = (data['initialDeviceStepCount'] ?? 0).toDouble();
+      if (initialDeviceStepCount == 0.0 || initialDeviceStepCount != savedDeviceStepCount) {
+        initialDeviceStepCount = savedDeviceStepCount;
+      }
 
       // Update UI variables
       steps.value = lastSavedSteps;
@@ -114,6 +160,7 @@ Future<void> fetchFitnessData() async {
     print('Error fetching initial data: $e');
   }
 }
+
 
 // Check and reset data at midnight
 Future<void> checkAndResetData() async {

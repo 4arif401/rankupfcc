@@ -65,7 +65,7 @@ class _GameScreenState extends State<GameScreen>
     _fetchStepProgress();
 
     // Listen for real-time updates
-    //_listenForStepUpdates();
+    _listenForStepUpdates();
   }
 
   void _fetchStepProgress() async {
@@ -104,8 +104,52 @@ class _GameScreenState extends State<GameScreen>
         });
       }
     }
-
+  
     _updatePositions();
+  }
+
+  void _checkChallengeCompletion(String winnerId, String loserId, double progress) async {
+    if (progress >= stepGoal) {
+      // Calculate exp
+      int expGained = (stepGoal / 10).toInt();
+
+      // Remove `vsOngoing` from both users
+      await _firestore.collection('Users').doc(winnerId).update({
+        'vsOngoing': FieldValue.delete(),
+      });
+      await _firestore.collection('Users').doc(loserId).update({
+        'vsOngoing': FieldValue.delete(),
+      });
+
+      // Increment exp for the winner
+      await _firestore.collection('Users').doc(winnerId).update({
+        'exp': FieldValue.increment(expGained),
+      });
+
+      // Show dialog to the winner
+      if (winnerId == _auth.currentUser?.uid) {
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: Text("You win!"),
+              content: Text(
+                "You win the challenge against $friendUsername\n\n$expGained exp gained",
+                style: TextStyle(fontSize: 16),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.popUntil(context, ModalRoute.withName('/ChallengePage'));
+                  },
+                  child: Text("OK"),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    }
   }
 
 
@@ -113,27 +157,45 @@ class _GameScreenState extends State<GameScreen>
     final String? userId = _auth.currentUser?.uid;
     if (userId == null) return;
 
-    // Listen for real-time updates for the current user and friend
+    // Listen for real-time updates for the current user
     _firestore.collection('Users').doc(userId).snapshots().listen((snapshot) {
       if (snapshot.exists) {
-        setState(() {
-          myStepsProgress = (snapshot.data()?['steps'] ?? 0).toDouble();
-          myUsername = snapshot.data()?['username'] ?? "You";
+        final userData = snapshot.data() as Map<String, dynamic>?;
+        final userOngoing = userData?['vsOngoing'] as Map<String, dynamic>?;
+
+        if (userOngoing != null && mounted) {
+          setState(() {
+            myStepsProgress = (userOngoing['stepsProgress'] ?? 0).toDouble();
+            stepGoal = (userOngoing['stepGoal'] ?? 1).toDouble(); // Avoid division by zero
+            myUsername = userData?['username'] ?? "You";
+
+            _checkChallengeCompletion(userId, widget.friendId, myStepsProgress);
+          });
           _updatePositions();
-        });
+        }
       }
     });
 
+    // Listen for real-time updates for the friend's `vsOngoing`
     _firestore.collection('Users').doc(widget.friendId).snapshots().listen((snapshot) {
       if (snapshot.exists) {
-        setState(() {
-          friendStepsProgress = (snapshot.data()?['steps'] ?? 0).toDouble();
-          friendUsername = snapshot.data()?['username'] ?? "Friend";
+        final friendData = snapshot.data() as Map<String, dynamic>?;
+        final friendOngoing = friendData?['vsOngoing'] as Map<String, dynamic>?;
+
+        if (friendOngoing != null && mounted) {
+          setState(() {
+            friendStepsProgress = (friendOngoing['stepsProgress'] ?? 0).toDouble();
+            friendUsername = friendData?['username'] ?? "Friend";
+
+            _checkChallengeCompletion(widget.friendId, userId, friendStepsProgress);
+          });
           _updatePositions();
-        });
+        }
       }
     });
   }
+
+
 
   void _updatePositions() {
     // Animate the positions based on progress towards the goal
@@ -162,6 +224,17 @@ class _GameScreenState extends State<GameScreen>
     double dynamicHeight = MediaQuery.of(context).size.height * 2; // Extend height for scrolling
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.green,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            Navigator.pop(context); // Navigate back to the previous screen
+          },
+        ),
+        title: Text('Ongoing VS Challenge', style: TextStyle(color: Colors.white)),
+        centerTitle: true,
+      ),
       body: Stack(
         children: [
           SingleChildScrollView(
