@@ -9,8 +9,9 @@ In the game, users can determine step goal for the match, then they will compete
 
 ## Getting Started
 
-In order to install this application, you can go to this folder path in this GitHub:
-rankupfcc/build/app/outputs/flutter-apk/
-In this folder, you can find app-release.apk, you can download it and install it in your Android devices.
+In order to install this application, you can go to this link:
+https://drive.google.com/file/d/1zeYqnml6z2kECtzyJmfemPqWTJrTxXhf/view?usp=sharing
+You can download it and install it in your Android devices.
 
 This app can be enhanced more in terms of design and features, but unfortunately it is because of lack of time to complete it during the last semester before presentation of the project.
+I also didn't manage to create an app logo for this app. But I think I will try to update this periodically when I have free time just for fun.
