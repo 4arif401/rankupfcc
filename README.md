@@ -23,7 +23,7 @@ In the game, users can determine step goal for the match, then they will compete
 ## Installation
 
 In order to install this application, you can go to this link:
-https://drive.google.com/file/d/1zeYqnml6z2kECtzyJmfemPqWTJrTxXhf/view?usp=sharing
+https://drive.google.com/file/d/1d6_qOrVBdDsd-v0_k1enFHWMY3_HK2dN/view?usp=sharing
 You can download it and install it in your Android devices.
 
 This app can be enhanced more in terms of design and features, but unfortunately it is because of lack of time to complete it during the last semester before presentation of the project.
