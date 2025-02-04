@@ -62,43 +62,53 @@ class StepTracker {
         return;
       }
 
-      // Update stepsProgress in Firestore if `vsOngoing` exists
-      User? user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
-        if (userDoc.exists) {
-          final Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
-          final Map<String, dynamic>? userOngoing = userData?['vsOngoing'] as Map<String, dynamic>?;
+      // Update Firestore only if there are new steps
+      if (newSteps > 0) {
+        //update steps progress in Firestore
+        User? user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
+          if (userDoc.exists) {
+            final Map<String, dynamic>? userData = userDoc.data() as Map<String, dynamic>?;
+            final Map<String, dynamic>? userOngoing = userData?['vsOngoing'] as Map<String, dynamic>?;
 
-          if (userOngoing != null) {
-            // Get the current `stepsProgress` value from Firestore
-            int currentStepsProgress = userOngoing['stepsProgress'] ?? 0;
+            if (userOngoing != null) {
+              // Get the current `stepsProgress` value from Firestore
+              int currentStepsProgress = userOngoing['stepsProgress'] ?? 0;
 
-            // Calculate new `stepsProgress`
-            int updatedStepsProgress = currentStepsProgress + newSteps.toInt();
+              // Calculate new `stepsProgress`
+              int updatedStepsProgress = currentStepsProgress + newSteps.toInt();
 
-            // Update Firestore with the new `stepsProgress`
-            await FirebaseFirestore.instance.collection('Users').doc(user.uid).update({
-              'vsOngoing.stepsProgress': updatedStepsProgress,
-            });
+              // Update Firestore with the new `stepsProgress`
+              await FirebaseFirestore.instance.collection('Users').doc(user.uid).update({
+                'vsOngoing.stepsProgress': updatedStepsProgress,
+              });
+
+              print('Updated stepsProgress to: $updatedStepsProgress');
+            }
           }
         }
-      }
 
-      // Update local variables and reset device step count
-      steps.value = lastSavedSteps + newSteps;
-      activeTime.value = steps.value / 100; // Example: 100 steps = 1 minute
-      caloriesBurnt.value = steps.value * 0.04; // Example: 0.04 calories per step
+        // Update local variables
+        steps.value = lastSavedSteps + newSteps;
+        activeTime.value = steps.value / 100; // Example: 100 steps = 1 minute
+        caloriesBurnt.value = steps.value * 0.04; // Example: 0.04 calories per step
 
-      if (steps.value - lastSavedSteps >= 50) { // Save every 50 steps
-        saveFitnessData();
-        lastSavedSteps = steps.value;
-        initialDeviceStepCount = currentPedometerSteps; // Reset initialDeviceStepCount
+        // Save to Firebase periodically and reset local counters
+        if (steps.value - lastSavedSteps >= 1) { // Save every 50 steps
+          saveFitnessData();
+          lastSavedSteps = steps.value;
+          initialDeviceStepCount = currentPedometerSteps; // Reset initialDeviceStepCount
+        } /*else {
+          // Only reset initialDeviceStepCount after processing
+          initialDeviceStepCount = currentPedometerSteps;
+        }*/
       }
     } catch (e) {
       print('Error updating step count: $e');
     }
   }
+
 
 
   // Handle errors in step tracking

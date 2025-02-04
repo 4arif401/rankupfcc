@@ -99,7 +99,7 @@ class _ChallengePageState extends State<ChallengePage> {
   @override
   void dispose() {
     _countdownTimer?.cancel(); // Cancel the timer when the widget is disposed
-    //steps.removeListener(_updateChallengeProgress);
+    steps.removeListener(_updateChallengeProgress);
     super.dispose();
   }
 
@@ -717,7 +717,7 @@ class _ChallengePageState extends State<ChallengePage> {
               true, // isSolo
             ),
             SizedBox(height: 20),
-            Text('Co-op Challenge', style: _headerStyle),
+            Text('VS Challenge', style: _headerStyle),
             _buildCoopChallengeCard(),
             /*// Accepted Challenge Title and Horizontal Line
             Text(
